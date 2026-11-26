@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Thermal Receipt</title>
+<script type="application/json" id="template-meta">
+{
+  "name": "Thermal Receipt (80mm)",
+  "version": "1.0",
+  "fields": {
+    "invoice_number": { "label": "Receipt #", "default": "INV-001" },
+    "tax_rate": { "label": "Tax rate (%)" },
+    "invoice_discount": { "label": "Discount" },
+    "footer_note": { "type": "textarea", "default": "Thank you! Please visit again." }
+  }
+}
+</script>
+<style>
+  @page { size: 80mm 297mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  body {
+    width: 80mm;
+    padding: 4mm 4mm 6mm;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 8.5pt;
+    line-height: 1.35;
+    color: #000000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  p { margin: 0; }
+  .center { text-align: center; }
+  .logo img { max-width: 36mm; max-height: 18mm; object-fit: contain; display: block; margin: 0 auto 1.5mm; filter: grayscale(1); }
+  .name { font-size: 12pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .sep { border: 0; border-top: 1px dashed #000000; margin: 2mm 0; }
+  .meta { width: 100%; border-collapse: collapse; }
+  .meta td { padding: 0; }
+  table.items { width: 100%; border-collapse: collapse; }
+  table.items th { font-weight: 700; text-align: left; padding: 0 0 1mm; border-bottom: 1px dashed #000000; }
+  table.items td { padding: 1mm 0 0; vertical-align: top; }
+  table.items td.desc { padding-top: 1.2mm; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.items th.num { text-align: right; }
+  table.items th.center { text-align: center; }
+  .totals { width: 100%; border-collapse: collapse; }
+  .totals td { padding: 0.4mm 0; }
+  .totals tr.grand td { font-size: 11pt; font-weight: 700; padding-top: 1.5mm; }
+  .words { font-size: 7.5pt; margin-top: 1mm; }
+  .footer { margin-top: 2mm; }
+</style>
+</head>
+<body>
+  <div class="center">
+    <div class="logo" data-if="business_logo"><img src="{{business_logo}}" alt="Logo"></div>
+    <p class="name">{{business_name}}</p>
+    <p>{{business_address}}</p>
+    <p data-if="business_phone">Ph: {{business_phone}}</p>
+    <p data-if="business_gstin">GSTIN: {{business_gstin}}</p>
+  </div>
+
+  <hr class="sep">
+
+  <table class="meta">
+    <tr><td>Receipt: {{invoice_number}}</td><td class="num">{{invoice_date}}</td></tr>
+  </table>
+  <p data-if="customer_name">Customer: {{customer_name}}</p>
+  <p data-if="customer_phone">Ph: {{customer_phone}}</p>
+
+  <hr class="sep">
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th class="num">Qty</th>
+        <th class="num">Amt</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr data-repeat="items">
+        <td class="desc">{{item.description}}<br>@ {{item.price}}</td>
+        <td class="num">{{item.qty}} {{item.unit}}</td>
+        <td class="num">{{item.total}}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="sep">
+
+  <table class="totals">
+    <tr><td>Subtotal</td><td class="num">{{subtotal}}</td></tr>
+    <tr data-if="tax_rate"><td>Tax {{tax_rate}}%</td><td class="num">{{tax_amount}}</td></tr>
+    <tr data-if="shipping_charges"><td>Delivery</td><td class="num">{{shipping_charges}}</td></tr>
+    <tr data-if="invoice_discount"><td>Discount</td><td class="num">-{{invoice_discount}}</td></tr>
+    <tr class="grand"><td>TOTAL</td><td class="num">{{grand_total}}</td></tr>
+  </table>
+  <p class="words">{{total_in_words}}</p>
+
+  <hr class="sep">
+
+  <p class="center footer" data-if="footer_note">{{footer_note}}</p>
+</body>
+</html>

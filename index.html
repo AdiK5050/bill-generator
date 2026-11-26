@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https: http:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; manifest-src 'self'; worker-src 'self'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <title>Bill Generator</title>
+    <meta
+      name="description"
+      content="Create bills and invoices from templates, preview live, print or save as PDF. Works offline."
+    />
+    <meta name="theme-color" content="#2f5bea" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Bills" />
+    <link rel="stylesheet" href="css/app.css" />
+    <script src="js/vendor/purify.min.js" defer></script>
+    <script type="module" src="js/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="app-header">
+      <div class="brand">
+        <img src="icons/icon.svg" alt="" width="28" height="28" />
+        <span>Bill Generator</span>
+      </div>
+      <nav class="app-nav" aria-label="Main">
+        <a href="#/bill" data-nav="bill">Bill</a>
+        <a href="#/templates" data-nav="templates">Templates</a>
+        <a href="#/history" data-nav="history">History</a>
+        <a href="#/settings" data-nav="settings">Settings</a>
+      </nav>
+      <button type="button" class="sync-chip" id="sync-chip" data-state="guest">Guest</button>
+    </header>
+
+    <div class="update-bar" id="update-bar" hidden>
+      A new version is ready. <button type="button" class="btn small primary">Reload</button>
+    </div>
+    <div class="fatal" id="fatal" role="alert" hidden></div>
+
+    <main id="main" tabindex="-1">
+      <section id="view-bill" class="view view-bill" aria-label="Bill"></section>
+      <section id="view-templates" class="view" aria-label="Templates" hidden></section>
+      <section id="view-history" class="view" aria-label="History" hidden></section>
+      <section id="view-settings" class="view" aria-label="Settings" hidden></section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <noscript><p class="fatal">Bill Generator needs JavaScript to run.</p></noscript>
+  </body>
+</html>

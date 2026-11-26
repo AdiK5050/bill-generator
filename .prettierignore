@@ -1,0 +1,5 @@
+js/vendor/
+node_modules/
+server/data/
+templates/
+*.md
