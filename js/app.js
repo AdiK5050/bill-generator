@@ -120,7 +120,11 @@ async function main() {
       go('bill');
     },
   });
-  await initSettingsView(document.getElementById('view-settings'), { onDataChanged: () => onExternalChange() });
+  await initSettingsView(document.getElementById('view-settings'), {
+    onDataChanged: () => onExternalChange(),
+    // Start a clean bill (this also replaces the saved draft) so no erased data stays on screen.
+    onErased: () => newBill({ confirm: false }),
+  });
 
   window.addEventListener('hashchange', () => show(currentView()));
   document.querySelectorAll('[data-nav]').forEach((a) =>

@@ -169,13 +169,14 @@ h4 {
   font-weight: 550;
   white-space: nowrap;
 }
-.app-nav a:hover {
-  background: var(--surface-2);
-  color: var(--text);
-}
 .app-nav a[aria-current='page'] {
   background: var(--accent-soft);
   color: var(--accent);
+}
+.nav-icon {
+  display: none;
+  width: 22px;
+  height: 22px;
 }
 .sync-chip {
   border: 1px solid var(--border);
@@ -234,9 +235,6 @@ main {
   border-radius: 8px;
   cursor: pointer;
 }
-.btn:hover {
-  background: var(--surface-2);
-}
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -246,18 +244,12 @@ main {
   border-color: var(--accent);
   color: var(--accent-text);
 }
-.btn.primary:hover {
-  filter: brightness(1.07);
-}
 .btn.danger {
   color: var(--danger);
 }
 .btn.ghost {
   background: transparent;
   border-color: transparent;
-}
-.btn.ghost:hover {
-  background: var(--surface-2);
 }
 .btn.small {
   min-height: 32px;
@@ -377,6 +369,37 @@ select.input {
   color: var(--accent);
 }
 
+/* Mobile browsers paint their own grey tap highlight, which can linger on a tapped button.
+   Use a short pressed state instead. */
+.btn,
+.tab,
+.app-nav a,
+.sync-chip {
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:active,
+.tab:active,
+.app-nav a:active {
+  filter: brightness(0.92);
+}
+
+/* Hover styles only for real pointers; on touch screens they would stick after a tap. */
+@media (hover: hover) {
+  .app-nav a:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  .btn:hover {
+    background: var(--surface-2);
+  }
+  .btn.primary:hover {
+    filter: brightness(1.07);
+  }
+  .btn.ghost:hover {
+    background: var(--surface-2);
+  }
+}
+
 /* ---------- Bill view ---------- */
 .toolbar {
   display: flex;
@@ -418,14 +441,19 @@ select.input {
   height: calc(100dvh - var(--header-h) - 100px);
   background: var(--preview-bg);
   border-radius: var(--radius);
+  /* One page is scaled to fit the pane (js/ui/preview.js), so a one-page bill never scrolls.
+     Only bills longer than a page scroll, to reach the next pages. */
   overflow: auto;
 }
 .preview-wrap {
   padding: 16px;
   min-height: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
 }
 .preview-stage {
-  margin: 0 auto;
+  flex: none;
   position: relative;
   overflow: hidden;
   box-shadow: 0 2px 12px rgb(0 0 0 / 18%);
@@ -537,6 +565,7 @@ select.input {
   margin-bottom: 12px;
 }
 .view-head .input[type='search'] {
+  flex: 1 1 240px;
   max-width: 320px;
 }
 .view-head > .input[type='text'] {
@@ -600,13 +629,16 @@ select.input {
   flex-wrap: wrap;
 }
 
+/* Cards flow into columns (masonry) so a tall card never leaves empty space beside short ones. */
 .settings {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
-  gap: 16px;
-  align-items: start;
+  columns: 3 360px;
+  column-gap: 16px;
+  max-width: 1400px;
 }
 .settings-card {
+  break-inside: avoid;
+  margin: 0 0 16px;
+  display: flow-root;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -826,10 +858,36 @@ select.input {
   .app-nav a {
     flex: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 2px;
     padding: 0;
-    font-size: 0.9rem;
+    font-size: 0.75rem;
+    min-width: 0;
+  }
+  .app-nav a[aria-current='page'] {
+    background: transparent;
+  }
+  .app-nav a[aria-current='page'] .nav-icon {
+    background: var(--accent-soft);
+  }
+  .nav-icon {
+    display: block;
+    width: 52px;
+    height: 28px;
+    padding: 3px 15px;
+    border-radius: 999px;
+  }
+  .view-head .input[type='search'] {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .item-grid {
+    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  }
+  .section-head {
+    flex-wrap: wrap;
   }
   .toast {
     bottom: calc(var(--nav-h) + 12px + env(safe-area-inset-bottom));
@@ -851,6 +909,8 @@ select.input {
   .bill-status {
     width: 100%;
     order: 10;
+    text-align: right;
+    font-size: 0.8rem;
   }
   .section-body {
     grid-template-columns: 1fr;

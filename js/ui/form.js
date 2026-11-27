@@ -23,7 +23,7 @@ export function buildForm(container, parsed, input, { onChange, onSaveProfile, f
       header.append(
         h('button', {
           type: 'button',
-          class: 'btn small ghost',
+          class: 'btn small',
           text: 'Save as business profile',
           title: 'Remember these business details and fill them into every new bill',
           onclick: () => onSaveProfile(input.values),

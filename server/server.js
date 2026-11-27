@@ -366,6 +366,7 @@ async function handleSync(req) {
   return withLock(`user:${user.id}`, async () => {
     const state = await readJson(file, { rev: 0, records: {} });
     let modified = false;
+    const rejected = new Set();
     for (const c of changes) {
       const key = `${c.store}/${c.id}`;
       const existing = state.records[key];
@@ -373,11 +374,18 @@ async function handleSync(req) {
         state.rev += 1;
         state.records[key] = { ...c, rev: state.rev };
         modified = true;
+        rejected.delete(key);
+      } else {
+        rejected.add(key);
       }
     }
     if (modified) await writeJsonAtomic(file, state);
-    const out = Object.values(state.records)
-      .filter((r) => r.rev > since)
+    // Changes since the client's revision, plus the newer server copy of every change that
+    // lost (older updatedAt). Without those, a client whose push lost would keep its own
+    // version forever, because the winning record may be older than `since`.
+    const outRecords = Object.values(state.records).filter((r) => r.rev > since);
+    for (const key of rejected) if (state.records[key].rev <= since) outRecords.push(state.records[key]);
+    const out = outRecords
       .sort((a, b) => a.rev - b.rev)
       .map(({ store, id, updatedAt, deleted, data }) => ({ store, id, updatedAt, deleted, data }));
     return { rev: state.rev, changes: out };

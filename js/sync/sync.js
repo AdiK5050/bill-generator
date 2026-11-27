@@ -22,7 +22,28 @@ export const DEFAULT_SYNC_CONFIG = {
 };
 export const INTERVAL_CHOICES = [5, 15, 30, 60, 360];
 const CHANGE_DEBOUNCE_MS = 5000;
-const MAX_BATCH = 200; // records per request, keeps request bodies reasonable
+const MAX_BATCH = 200; // records per request
+// Bytes per request. Bills carry a template snapshot and images, so count size too;
+// the reference server rejects bodies over 50 MB.
+const MAX_BATCH_BYTES = 8 * 1024 * 1024;
+const encoder = new TextEncoder();
+
+/** Take dirty records up to the count and size limits (always at least one). */
+function takeBatch(all) {
+  const batch = [];
+  const changes = [];
+  let bytes = 0;
+  for (const item of all) {
+    if (batch.length >= MAX_BATCH) break;
+    const wire = toWire(item.store, item.record);
+    const size = encoder.encode(JSON.stringify(wire)).length;
+    if (batch.length && bytes + size > MAX_BATCH_BYTES) break;
+    batch.push(item);
+    changes.push(wire);
+    bytes += size;
+  }
+  return { batch, changes };
+}
 
 export async function getSyncConfig() {
   return { ...DEFAULT_SYNC_CONFIG, ...((await getLocal('syncConfig')) || {}) };
@@ -78,8 +99,8 @@ async function doSync() {
     let pushed = 0;
     // Loop: push in batches; each response also carries server changes since lastRev.
     for (let guard = 0; guard < 1000; guard++) {
-      const dirty = (await getDirtyRecords()).slice(0, MAX_BATCH);
-      const changes = dirty.map(({ store, record }) => toWire(store, record));
+      const all = await getDirtyRecords();
+      const { batch: dirty, changes } = takeBatch(all);
       const res = await api(account.serverUrl, '/api/sync', {
         method: 'POST',
         token: account.token,
@@ -92,12 +113,18 @@ async function doSync() {
       pulled += await applyRemote(res.changes);
       pushed += changes.length;
       state = await patchSyncState({ lastRev: res.rev });
-      if (dirty.length < MAX_BATCH) break;
+      if (dirty.length === all.length) break;
     }
     await patchSyncState({ lastSyncAt: Date.now(), lastError: null, lastErrorAt: null });
     return { pushed, pulled };
   } catch (e) {
-    if (e instanceof ApiError && e.status === 401) {
+    if (e instanceof ApiError && e.status === 413) {
+      await patchSyncState({
+        lastError:
+          'A bill or template is too large for the server (often a very large logo image). Use a smaller image and try again.',
+        lastErrorAt: Date.now(),
+      });
+    } else if (e instanceof ApiError && e.status === 401) {
       // Token expired or revoked: stay usable offline, ask the user to sign in again.
       await setAccount({ ...account, token: null, needsReauth: true });
       await patchSyncState({
@@ -148,11 +175,17 @@ const scheduler = {
     if (cfg.onOpen) syncNow();
   },
 
+  generation: 0,
+
   async reschedule() {
-    clearInterval(this.timer);
-    this.timer = null;
+    // Overlapping calls (e.g. a settings change right after sign-in) must not each start a
+    // timer: only the newest call sets one.
+    const generation = ++this.generation;
     const cfg = await getSyncConfig();
     const account = await getAccount();
+    if (generation !== this.generation) return;
+    clearInterval(this.timer);
+    this.timer = null;
     if (account.mode !== 'user') return;
     if (cfg.schedule === 'interval') {
       const minutes = Math.max(1, Number(cfg.intervalMinutes) || 15);

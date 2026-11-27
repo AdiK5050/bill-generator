@@ -83,7 +83,9 @@ function applyConditionals(root, values, row) {
   const els = Array.from(root.querySelectorAll('[data-if]'));
   if (root.nodeType === 1 && root.hasAttribute('data-if')) els.unshift(root);
   for (const el of els) {
-    if (!el.isConnected && el !== root) continue;
+    // Skip elements already removed with an ancestor. (Not isConnected: rows are filled
+    // while they sit in a DocumentFragment, where nothing counts as connected.)
+    if (el !== root && !root.contains(el)) continue;
     const expr = (el.getAttribute('data-if') || '').trim();
     // Rows handle their own item.* conditions.
     if (!row && expr.replace(/^!/, '').startsWith('item.')) continue;

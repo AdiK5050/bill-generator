@@ -95,8 +95,24 @@ export async function initBillView(root) {
     try {
       await loadCurrentTemplate();
     } catch {
-      state.templateId = DEFAULT_TEMPLATE_ID;
-      await loadCurrentTemplate();
+      // The draft's template was deleted. If the draft is a saved bill, keep using the copy
+      // saved with that bill; otherwise fall back to the default template.
+      const rec = draft.billId ? await getRecord('bills', draft.billId) : null;
+      if (rec && rec.templateId === state.templateId && rec.templateHtml) {
+        state.settings = await getSettings();
+        state.template = {
+          id: rec.templateId,
+          name: rec.templateName,
+          fromSnapshot: true,
+          ...loadTemplate(rec.templateHtml),
+        };
+        await refreshTemplateList();
+        rebuildForm();
+        updatePreview();
+      } else {
+        state.templateId = DEFAULT_TEMPLATE_ID;
+        await loadCurrentTemplate();
+      }
     }
   } else {
     await newBill({ confirm: false });
@@ -109,7 +125,14 @@ export async function refreshTemplateList() {
   const mine = h('optgroup', { label: 'My templates' });
   for (const t of list) (t.builtin ? builtin : mine).append(h('option', { value: t.id, text: t.name }));
   els.select.replaceChildren(builtin, ...(mine.children.length ? [mine] : []));
-  if (!list.some((t) => t.id === state.templateId)) state.templateId = DEFAULT_TEMPLATE_ID;
+  if (!list.some((t) => t.id === state.templateId)) {
+    if (state.template?.fromSnapshot && state.template.id === state.templateId) {
+      // An open bill whose template was deleted: keep showing the copy saved with the bill.
+      els.select.append(h('option', { value: state.templateId, text: `${state.template.name} (deleted)` }));
+    } else {
+      state.templateId = DEFAULT_TEMPLATE_ID;
+    }
+  }
   els.select.value = state.templateId;
 }
 
@@ -195,6 +218,7 @@ export async function newBill({ confirm = true, templateId } = {}) {
   const profile = await getProfile();
   state.billId = null;
   if (templateId) state.templateId = templateId;
+  else if (state.template?.fromSnapshot) state.templateId = DEFAULT_TEMPLATE_ID; // its template is gone
   state.input = {
     values: { ...profile, invoice_date: todayIso(), invoice_number: formatInvoiceNumber(state.settings) },
     items: [{}],
@@ -222,15 +246,21 @@ export async function openBill(id, { duplicate = false } = {}) {
   } else {
     state.billId = rec.id;
   }
+  // Load the bill's own template before refreshing the list: the refresh falls back to the
+  // default template when the id is missing, which would hide the deleted-template case.
   try {
-    await refreshTemplateList();
     state.template = await getTemplate(state.templateId);
   } catch {
     // Template was deleted: fall back to the snapshot stored with the bill.
-    state.template = { id: rec.templateId, name: rec.templateName, ...loadTemplate(rec.templateHtml) };
+    state.template = {
+      id: rec.templateId,
+      name: rec.templateName,
+      fromSnapshot: true,
+      ...loadTemplate(rec.templateHtml),
+    };
     toast('The original template was deleted; showing the copy saved with this bill.');
   }
-  els.select.value = state.templateId;
+  await refreshTemplateList();
   rebuildForm();
   updatePreview();
   state.dirtySinceSave = duplicate;
@@ -295,11 +325,13 @@ export async function printBill() {
 export async function onExternalChange() {
   state.settings = await getSettings();
   await refreshTemplateList();
-  try {
-    state.template = await getTemplate(state.templateId);
-  } catch {
-    state.templateId = DEFAULT_TEMPLATE_ID;
-    state.template = await getTemplate(state.templateId);
+  if (!state.template?.fromSnapshot) {
+    try {
+      state.template = await getTemplate(state.templateId);
+    } catch {
+      state.templateId = DEFAULT_TEMPLATE_ID;
+      state.template = await getTemplate(state.templateId);
+    }
   }
   els.select.value = state.templateId;
   rebuildForm();

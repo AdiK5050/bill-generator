@@ -34,9 +34,9 @@ import {
 let root;
 let hooks;
 
-export function initSettingsView(el, { onDataChanged }) {
+export function initSettingsView(el, { onDataChanged, onErased }) {
   root = el;
-  hooks = { onDataChanged };
+  hooks = { onDataChanged, onErased };
   window.addEventListener('sync-status', () => {
     if (!root.hidden) refreshSyncStatus();
   });
@@ -345,7 +345,11 @@ async function signOutFlow() {
   if (r !== 'keep' && r !== 'erase') return;
   await signOut();
   await resetSyncState();
-  if (r === 'erase') await eraseSyncedData();
+  if (r === 'erase') {
+    await eraseSyncedData();
+    // The open bill and its saved draft hold customer and business details too.
+    await hooks.onErased?.();
+  }
   toast(r === 'erase' ? 'Signed out and erased local data.' : 'Signed out. Your data stays on this device.');
   await renderSettings();
   hooks.onDataChanged();

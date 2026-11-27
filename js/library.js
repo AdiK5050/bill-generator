@@ -90,7 +90,8 @@ export function withMetaBlock(html, meta) {
   if (!meta || !Object.keys(meta).length) return html;
   const json = JSON.stringify(meta, null, 2).replace(/</g, '\\u003c');
   const block = `<script type="application/json" id="template-meta">\n${json}\n</script>`;
-  return html.replace(/<head>/i, `<head>\n${block}`);
+  // Function replacer: a string one would treat $& and $' in the JSON as patterns.
+  return html.replace(/<head>/i, () => `<head>\n${block}`);
 }
 
 export async function getDownloadHtml(id) {

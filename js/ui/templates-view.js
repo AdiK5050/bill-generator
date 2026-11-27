@@ -17,6 +17,12 @@ import { getSettings, getProfile } from '../settings.js';
 
 let root;
 let hooks;
+let editorPreview = null; // the open editor's preview, destroyed when the view changes
+
+function closeEditorPreview() {
+  editorPreview?.destroy();
+  editorPreview = null;
+}
 
 export function initTemplatesView(el, { onUse, onLibraryChanged }) {
   root = el;
@@ -25,6 +31,7 @@ export function initTemplatesView(el, { onUse, onLibraryChanged }) {
 }
 
 export async function renderLibrary() {
+  closeEditorPreview();
   const list = await listTemplates();
   const grid = h('div', { class: 'card-grid' });
   for (const t of list) grid.append(templateCard(t));
@@ -340,7 +347,9 @@ async function openEditor(id, fromId) {
       h('div', { class: 'pane preview-pane' }, previewWrap),
     ),
   );
+  closeEditorPreview();
   const preview = new Preview(previewWrap);
+  editorPreview = preview;
   refresh();
 }
 

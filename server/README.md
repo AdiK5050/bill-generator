@@ -45,7 +45,7 @@ PORT=8787 DATA_DIR=/srv/bill-sync ALLOWED_ORIGINS=https://you.github.io node ser
 - Authenticated calls send `Authorization: Bearer <token>`.
 - Errors are `{ error: "message" }` with status 400, 401, 403 (registration closed), 404, 405, 409 (username taken), 413 (body over 50 MB) or 429 (too many failed logins).
 - Usernames: 3 to 32 characters, letters, numbers, `_`, `.`, `-`, case-insensitive. Passwords: at least 8 characters.
-- `store` is one of `templates`, `bills`, `kv`. A change is accepted when the server has no copy or `updatedAt` is greater than or equal to the stored one (last write wins). Each accepted change gets the next per-user revision number. The response lists every record with a revision above `since`, in revision order. Deleted records are kept as tombstones with `data: null`.
+- `store` is one of `templates`, `bills`, `kv`. A change is accepted when the server has no copy or `updatedAt` is greater than or equal to the stored one (last write wins). Each accepted change gets the next per-user revision number. The response lists every record with a revision above `since`, in revision order, plus the server's copy of any pushed change that was rejected for being older, so the client can take the newer version. Deleted records are kept as tombstones with `data: null`.
 
 ## Reaching the server from the app
 

@@ -95,11 +95,14 @@ export function uuid() {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-/** Monotonic timestamp so two quick edits never share an updatedAt. */
+/**
+ * Monotonic timestamp so two quick edits never share an updatedAt. `after` is the record's
+ * previous updatedAt: an edit is always newer than the version it was made from, even when
+ * this device's clock is behind the device that wrote that version.
+ */
 let lastStamp = 0;
-function stamp() {
-  const now = Date.now();
-  lastStamp = now > lastStamp ? now : lastStamp + 1;
+function stamp(after = 0) {
+  lastStamp = Math.max(Date.now(), lastStamp + 1, after + 1);
   return lastStamp;
 }
 
@@ -117,7 +120,7 @@ export async function listRecords(store) {
 
 /** Create or update a record; marks it dirty for sync. */
 export async function putRecord(store, record) {
-  const now = stamp();
+  const now = stamp(record.updatedAt || 0);
   const rec = { createdAt: now, ...record, id: record.id || uuid(), updatedAt: now, deleted: false, dirty: 1 };
   await tx([store], 'readwrite', (t) => reqToPromise(t.objectStore(store).put(rec)));
   emit({ store, id: rec.id, source: 'local' });
@@ -126,7 +129,8 @@ export async function putRecord(store, record) {
 
 /** Soft delete (tombstone) so the delete can sync. */
 export async function deleteRecord(store, id) {
-  const rec = { id, updatedAt: stamp(), deleted: true, dirty: 1 };
+  const cur = await tx([store], 'readonly', (t) => reqToPromise(t.objectStore(store).get(id)));
+  const rec = { id, updatedAt: stamp(cur?.updatedAt || 0), deleted: true, dirty: 1 };
   await tx([store], 'readwrite', (t) => reqToPromise(t.objectStore(store).put(rec)));
   emit({ store, id, source: 'local' });
 }

@@ -18,9 +18,18 @@ function getFormatter(key, make) {
 export function toNumber(value) {
   if (value === null || value === undefined) return null;
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  const cleaned = String(value).replace(/[^0-9.-]/g, '');
-  if (cleaned === '' || cleaned === '-' || cleaned === '.') return null;
-  const n = Number.parseFloat(cleaned);
+  // Take the first number in the text, so prefixes like "Rs." or "₹" never add a decimal point.
+  // (No regex lookbehind: older iOS Safari cannot parse it.)
+  const text = String(value);
+  const digits = /-?\d[\d,]*(?:\.\d*)?/.exec(text); // 1,234.50
+  const dot = /(^|[^\w.])(-?\.\d+)/.exec(text); // .5, but not the dot in "Rs.5"
+  let found = digits ? { at: digits.index, text: digits[0] } : null;
+  if (dot) {
+    const at = dot.index + dot[1].length;
+    if (!found || at < found.at) found = { at, text: dot[2] };
+  }
+  if (!found) return null;
+  const n = Number.parseFloat(found.text.replace(/,/g, ''));
   return Number.isFinite(n) ? n : null;
 }
 

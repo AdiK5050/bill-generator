@@ -207,6 +207,35 @@ t('no transport hides subtotal and charge lines', () => {
   ok(!E.renderBill(advanceTpl.html, d).includes('id="tr"'), 'hidden');
 });
 
+// review fixes
+t('toNumber ignores currency prefixes', () => {
+  eq(['Rs. 500', 'Rs.1,250.50', '₹ 99', '.5', '-.5', 'abc', '1,234.50'].map(E.toNumber), [
+    500,
+    1250.5,
+    99,
+    0.5,
+    -0.5,
+    null,
+    1234.5,
+  ]);
+});
+t('data-if on item fields inside rows', () => {
+  const tpl = E.loadTemplate(
+    `<html><body><table><tbody><tr data-repeat="items"><td>{{item.description}}<span data-if="item.hsn"> HSN {{item.hsn}}</span></td></tr></tbody></table></body></html>`,
+  );
+  const d = E.buildDisplayData(tpl.parsed, { items: [{ description: 'A', hsn: '0901' }, { description: 'B' }] });
+  const out = E.renderBill(tpl.html, d);
+  ok(out.includes('A<span> HSN 0901</span>'), 'shown when set: ' + out.match(/<td>A.*?<\/td>/)?.[0]);
+  ok(out.includes('<td>B</td>'), 'hidden when empty: ' + out.match(/<td>B.*?<\/td>/)?.[0]);
+  ok(!out.includes('data-if'), 'no leftover data-if');
+});
+t('meta with $ patterns survives', () => {
+  const meta = { name: 'T', fields: { x: { label: "Cost $& $' $$", placeholder: '$$' } } };
+  const html = withMetaBlock('<html><head></head><body>{{x}}</body></html>', meta);
+  const back = E.loadTemplate(html).parsed.fieldMap.x;
+  eq([back.label, back.placeholder], ["Cost $& $' $$", '$$']);
+});
+
 // stored user templates keep their template-meta
 t('meta survives save and load', () => {
   const src = E.loadTemplate(`<html><head><script type="application/json" id="template-meta">
