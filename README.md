@@ -4,7 +4,7 @@ A template-based bill and invoice generator for small businesses. Pick a built-i
 
 Use it as a **guest** (data stays on the device) or **sign in to your own sync server** to back up and sync between devices on a schedule you choose.
 
-Template rules are in [docs/TEMPLATE_GUIDE.md](docs/TEMPLATE_GUIDE.md).
+To make your own templates, open the template guide in the app (Templates > the template guide), or [docs/template-guide.html](docs/template-guide.html). It includes a live playground.
 
 ## Run locally
 

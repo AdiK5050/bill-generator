@@ -5,7 +5,7 @@ export default [
   { ignores: ['js/vendor/**', 'node_modules/**', 'server/data/**'] },
   js.configs.recommended,
   {
-    files: ['js/**/*.js', 'sw.js', 'tests/**/*.js'],
+    files: ['js/**/*.js', 'docs/**/*.js', 'sw.js', 'tests/**/*.js'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',
@@ -20,6 +20,7 @@ export default [
     },
   },
   { files: ['sw.js'], languageOptions: { sourceType: 'script', globals: { ...globals.serviceworker } } },
+  { files: ['docs/theme.js'], languageOptions: { sourceType: 'script' } },
   {
     files: ['server/**/*.js', 'tools/**/*.mjs', 'tests/**/*.mjs', 'eslint.config.js'],
     languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...globals.node } },

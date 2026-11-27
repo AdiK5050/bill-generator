@@ -1,6 +1,6 @@
 // Service worker: caches the app shell so the app works offline after the first load.
 // Bump CACHE_VERSION whenever any file in APP_SHELL changes.
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7';
 const CACHE_NAME = `bill-generator-${CACHE_VERSION}`;
 
 const APP_SHELL = [
@@ -36,7 +36,10 @@ const APP_SHELL = [
   'templates/modern.html',
   'templates/gst-invoice.html',
   'templates/thermal-receipt.html',
-  'docs/TEMPLATE_GUIDE.md',
+  'docs/template-guide.html',
+  'docs/template-guide.css',
+  'docs/template-guide.js',
+  'docs/theme.js',
 ];
 
 self.addEventListener('install', (event) => {

@@ -53,7 +53,7 @@ export async function renderLibrary() {
       'p',
       { class: 'hint' },
       'Built-in templates are read-only. Duplicate one to make your own copy. Templates follow the rules in ',
-      h('a', { href: 'docs/TEMPLATE_GUIDE.md', target: '_blank', rel: 'noopener', text: 'the template guide' }),
+      h('a', { href: 'docs/template-guide.html', text: 'the template guide' }),
       '.',
     ),
     grid,

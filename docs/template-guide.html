@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <title>Template Guide · Bill Generator</title>
+    <meta name="description" content="How to make your own bill and invoice templates for Bill Generator." />
+    <meta name="theme-color" content="#2f5bea" />
+    <link rel="icon" href="../icons/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="../css/app.css" />
+    <link rel="stylesheet" href="template-guide.css" />
+    <script src="theme.js"></script>
+    <script src="../js/vendor/purify.min.js" defer></script>
+    <script type="module" src="template-guide.js"></script>
+  </head>
+  <body class="guide">
+    <a class="skip-link" href="#content">Skip to content</a>
+    <header class="app-header guide-header">
+      <a class="brand" href="../#/templates">
+        <img src="../icons/icon.svg" alt="" width="28" height="28" />
+        <span>Bill Generator</span>
+      </a>
+      <span class="spacer"></span>
+      <a class="btn small" href="../#/templates">Back to the app</a>
+    </header>
+
+    <div class="g-hero">
+      <div class="g-wrap">
+        <p class="g-eyebrow">Template guide</p>
+        <h1>Design your own bill</h1>
+        <p class="g-lede">
+          A template is one HTML file. Write your layout, put <code class="ph">{{placeholders}}</code> where the details
+          go, and the app turns them into a form, does the maths, and prints your design exactly.
+        </p>
+        <ol class="g-flow" aria-label="How it works">
+          <li>
+            <span class="g-flow-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M8 7 3 12l5 5M16 7l5 5-5 5M13.5 4l-3 16" /></svg>
+            </span>
+            <strong>Write HTML</strong>
+            <span>Your layout, with <code>{{customer_name}}</code> where values go</span>
+          </li>
+          <li>
+            <span class="g-flow-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+                <path d="M8 9h8M8 13h8M8 17h5" />
+              </svg>
+            </span>
+            <strong>The app builds a form</strong>
+            <span>One input per placeholder, with the right type</span>
+          </li>
+          <li>
+            <span class="g-flow-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M7 3h10v5H7zM5 8h14a2 2 0 0 1 2 2v6h-4v5H7v-5H3v-6a2 2 0 0 1 2-2z" />
+              </svg>
+            </span>
+            <strong>Fill and print</strong>
+            <span>Totals, tax and amount in words are calculated for you</span>
+          </li>
+        </ol>
+        <div class="g-hero-actions">
+          <a class="btn primary" href="#playground">Try it live</a>
+          <a class="btn" href="#quick-start">Quick start</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="g-wrap g-layout">
+      <nav class="g-toc" aria-label="On this page">
+        <p class="g-toc-title">On this page</p>
+        <ol>
+          <li><a href="#quick-start">Quick start</a></li>
+          <li><a href="#placeholders">Placeholders</a></li>
+          <li><a href="#items">Item rows</a></li>
+          <li><a href="#conditions">Show and hide</a></li>
+          <li><a href="#calculated">Calculated fields</a></li>
+          <li><a href="#images-css">Images and CSS</a></li>
+          <li><a href="#page-size">Page size</a></li>
+          <li><a href="#metadata">Labels and defaults</a></li>
+          <li><a href="#rules">Rules and limits</a></li>
+          <li><a href="#playground">Playground</a></li>
+          <li><a href="#checklist">Before you upload</a></li>
+        </ol>
+      </nav>
+
+      <main id="content" class="g-main" tabindex="-1">
+        <!-- Quick start -->
+        <section id="quick-start" class="g-section">
+          <h2>Quick start</h2>
+          <p>The fastest way is to start from a template that already works and change it.</p>
+          <ol class="g-steps">
+            <li>
+              <strong>Get a starting file.</strong> In the app, open <b>Templates</b> and press <b>Download</b> on a
+              built-in template, or copy one from the <a href="#playground">playground</a> below.
+            </li>
+            <li>
+              <strong>Edit it</strong> in any text editor. Change the layout and colours, and add or rename
+              placeholders.
+            </li>
+            <li>
+              <strong>Upload it.</strong> Templates &gt; <b>Upload .html</b>. The app shows a report of every field it
+              found and anything it removed, before you save.
+            </li>
+            <li>
+              <strong>Use it.</strong> Pick it from the template menu on the Bill page. Uploading a file with the same
+              template name later replaces the saved copy.
+            </li>
+          </ol>
+          <p class="g-note">
+            You can also edit in the app: Templates &gt; <b>New from Classic</b> opens an editor with a live preview.
+          </p>
+        </section>
+
+        <!-- Placeholders -->
+        <section id="placeholders" class="g-section">
+          <h2>Placeholders</h2>
+          <p>
+            Write <code class="ph">{{field_name}}</code> anywhere in your text and the app adds a form field for it. Use
+            lowercase words joined by underscores. The label comes from the name, so
+            <code class="ph">{{customer_name}}</code> becomes <em>Customer name</em>.
+          </p>
+
+          <figure class="g-anatomy" aria-label="How placeholders in a template become form fields">
+            <div class="g-anatomy-col">
+              <p class="g-col-label">In your template</p>
+              <pre class="g-code"><code>&lt;h1&gt;<mark>{{business_name}}</mark>&lt;/h1&gt;
+&lt;p&gt;Bill to: <mark>{{customer_name}}</mark>&lt;/p&gt;
+&lt;p&gt;Date: <mark>{{invoice_date}}</mark>&lt;/p&gt;
+&lt;p&gt;Delivery: <mark>{{delivery_charges}}</mark>&lt;/p&gt;</code></pre>
+            </div>
+            <div class="g-anatomy-arrow" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+            </div>
+            <div class="g-anatomy-col">
+              <p class="g-col-label">Form the app builds</p>
+              <div class="g-form-mock">
+                <div class="g-mock-section">Business details</div>
+                <div class="g-mock-field"><span>Business name</span><i></i></div>
+                <div class="g-mock-section">Customer / Bill to</div>
+                <div class="g-mock-field"><span>Customer name</span><i></i></div>
+                <div class="g-mock-section">Invoice details</div>
+                <div class="g-mock-field"><span>Invoice date</span><i class="date">dd/mm/yyyy</i></div>
+                <div class="g-mock-section">Other</div>
+                <div class="g-mock-field"><span>Delivery charges</span><i class="num">0.00</i></div>
+              </div>
+            </div>
+          </figure>
+
+          <p>
+            Values are always inserted as plain text, never as HTML. Line breaks in addresses and notes become line
+            breaks on the bill.
+          </p>
+
+          <h3>The name picks the input type</h3>
+          <div class="table-scroll">
+            <table class="g-table">
+              <thead>
+                <tr>
+                  <th>If the name</th>
+                  <th>The input is</th>
+                  <th>Example</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>ends with <code>_date</code></td>
+                  <td>Date picker</td>
+                  <td><code>due_date</code></td>
+                </tr>
+                <tr>
+                  <td>ends with <code>_address</code>, <code>_notes</code>, <code>_terms</code></td>
+                  <td>Multi-line text</td>
+                  <td><code>customer_address</code></td>
+                </tr>
+                <tr>
+                  <td>ends with <code>_phone</code></td>
+                  <td>Phone number</td>
+                  <td><code>business_phone</code></td>
+                </tr>
+                <tr>
+                  <td>ends with <code>_email</code></td>
+                  <td>Email</td>
+                  <td><code>customer_email</code></td>
+                </tr>
+                <tr>
+                  <td>ends with <code>_logo</code>, <code>_image</code>, <code>_signature</code></td>
+                  <td>Image upload</td>
+                  <td><code>business_logo</code></td>
+                </tr>
+                <tr>
+                  <td>
+                    is <code>tax_rate</code> or <code>tax_&lt;name&gt;_rate</code>, or ends with <code>_percent</code>
+                  </td>
+                  <td>Percentage</td>
+                  <td><code>tax_cgst_rate</code></td>
+                </tr>
+                <tr>
+                  <td>
+                    contains <code>price</code>, <code>amount</code>, <code>charge</code>, <code>rate</code>,
+                    <code>discount</code>, or ends with <code>_paid</code>
+                  </td>
+                  <td>Money</td>
+                  <td><code>advance_paid</code></td>
+                </tr>
+                <tr>
+                  <td>is <code>item.qty</code></td>
+                  <td>Number</td>
+                  <td><code>item.qty</code></td>
+                </tr>
+                <tr>
+                  <td>anything else</td>
+                  <td>Single-line text</td>
+                  <td><code>vehicle_number</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="g-note">A number at the end is ignored, so <code>business_phone_2</code> is still a phone field.</p>
+
+          <h3>The prefix picks the form section</h3>
+          <div class="g-chips">
+            <div class="g-chip-card">
+              <code>business_</code><span>Business details. Filled in from your saved business profile.</span>
+            </div>
+            <div class="g-chip-card"><code>customer_</code><span>Customer / Bill to</span></div>
+            <div class="g-chip-card"><code>invoice_</code><span>Invoice details</span></div>
+            <div class="g-chip-card"><code>item.</code><span>Items, one set per row</span></div>
+            <div class="g-chip-card"><code>tax_</code><span>Tax</span></div>
+            <div class="g-chip-card"><code>anything else</code><span>Other</span></div>
+          </div>
+        </section>
+
+        <!-- Items -->
+        <section id="items" class="g-section">
+          <h2>Item rows</h2>
+          <p>
+            Put <code>data-repeat="items"</code> on the element that should repeat once per item, usually a table row.
+            Inside it, use <code class="ph">{{item.&lt;field&gt;}}</code>.
+          </p>
+          <div class="g-split">
+            <pre class="g-code"><code>&lt;tr <mark>data-repeat="items"</mark>&gt;
+  &lt;td&gt;{{item.index}}&lt;/td&gt;
+  &lt;td&gt;{{item.description}}&lt;/td&gt;
+  &lt;td&gt;{{item.qty}} {{item.unit}}&lt;/td&gt;
+  &lt;td&gt;{{item.price}}&lt;/td&gt;
+  &lt;td&gt;{{item.total}}&lt;/td&gt;
+&lt;/tr&gt;</code></pre>
+            <div class="g-paper" aria-label="Result with two items">
+              <table class="g-mini-bill">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Item</th>
+                    <th class="n">Qty</th>
+                    <th class="n">Price</th>
+                    <th class="n">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1</td>
+                    <td>Jaggery</td>
+                    <td class="n">3,300 kg</td>
+                    <td class="n">₹90.00</td>
+                    <td class="n">₹2,97,000.00</td>
+                  </tr>
+                  <tr>
+                    <td>2</td>
+                    <td>Cashew W240</td>
+                    <td class="n">25 kg</td>
+                    <td class="n">₹980.00</td>
+                    <td class="n">₹24,500.00</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p>
+            Standard item fields are <code>description</code>, <code>qty</code>, <code>unit</code>,
+            <code>price</code> and <code>hsn</code>. Any other <code>item.</code> name, like <code>item.batch</code>,
+            becomes an extra box in each item row. <code>item.total</code> and <code>item.index</code> are filled in for
+            you.
+          </p>
+          <div class="g-callout warn">
+            <strong>Tables are strict.</strong>
+            <p>
+              Inside a <code>&lt;table&gt;</code>, put placeholders inside a <code>&lt;td&gt;</code> or
+              <code>&lt;th&gt;</code>. Text placed directly in <code>&lt;table&gt;</code>, <code>&lt;tbody&gt;</code> or
+              <code>&lt;tr&gt;</code> is moved out of the table by the browser.
+            </p>
+          </div>
+        </section>
+
+        <!-- Conditions -->
+        <section id="conditions" class="g-section">
+          <h2>Show and hide</h2>
+          <p>
+            Add <code>data-if="field_name"</code> to an element and it only appears when that field has a value. Start
+            the name with <code>!</code> to do the opposite.
+          </p>
+          <div class="g-cards">
+            <div class="g-card">
+              <p class="g-card-title">Only when filled</p>
+              <pre class="g-code"><code>&lt;p <mark>data-if="business_gstin"</mark>&gt;
+  GSTIN: {{business_gstin}}
+&lt;/p&gt;</code></pre>
+              <p class="g-muted">No GSTIN entered? The whole line disappears, label included.</p>
+            </div>
+            <div class="g-card">
+              <p class="g-card-title">Only when empty</p>
+              <pre class="g-code"><code>&lt;p <mark>data-if="!customer_name"</mark>&gt;
+  Cash sale
+&lt;/p&gt;</code></pre>
+              <p class="g-muted">Shows "Cash sale" when no customer name is given.</p>
+            </div>
+            <div class="g-card">
+              <p class="g-card-title">Inside item rows</p>
+              <pre class="g-code"><code>&lt;span <mark>data-if="item.hsn"</mark>&gt;
+  HSN {{item.hsn}}
+&lt;/span&gt;</code></pre>
+              <p class="g-muted">Checked separately for each row.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Calculated -->
+        <section id="calculated" class="g-section">
+          <h2>Calculated fields</h2>
+          <p>These are filled in by the app and never appear in the form. Use them anywhere in your template.</p>
+          <div class="table-scroll">
+            <table class="g-table">
+              <thead>
+                <tr>
+                  <th>Placeholder</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>{{item.total}}</code></td>
+                  <td>price × qty for that row</td>
+                </tr>
+                <tr>
+                  <td><code>{{item.index}}</code></td>
+                  <td>row number: 1, 2, 3</td>
+                </tr>
+                <tr>
+                  <td><code>{{subtotal}}</code></td>
+                  <td>sum of all item totals</td>
+                </tr>
+                <tr>
+                  <td><code>{{tax_&lt;name&gt;_amount}}</code></td>
+                  <td>
+                    subtotal × <code>tax_&lt;name&gt;_rate</code> ÷ 100, so <code>tax_cgst_rate</code> gives
+                    <code>tax_cgst_amount</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>{{tax_amount}}</code></td>
+                  <td>subtotal × <code>tax_rate</code> ÷ 100, plus every <code>tax_&lt;name&gt;_amount</code></td>
+                </tr>
+                <tr>
+                  <td><code>{{grand_total}}</code></td>
+                  <td>subtotal + tax + every <code>_charges</code> field − every <code>_discount</code> field</td>
+                </tr>
+                <tr>
+                  <td><code>{{total_in_words}}</code></td>
+                  <td>grand total in words, e.g. <em>Three Lakh Thirteen Thousand Rupees Only</em></td>
+                </tr>
+                <tr>
+                  <td><code>{{balance_due}}</code></td>
+                  <td>grand total − every <code>_paid</code> field</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Charges, discounts and advance payments</h3>
+          <p>The ending of a field's name tells the app what to do with the amount.</p>
+          <div class="g-ladder-wrap">
+            <div class="g-legend">
+              <div>
+                <code>_charges</code><span>added to the total, e.g. <code>transport_charges</code></span>
+              </div>
+              <div>
+                <code>_discount</code><span>taken off the total, e.g. <code>invoice_discount</code></span>
+              </div>
+              <div>
+                <code>_paid</code
+                ><span>already received; taken off to give the balance, e.g. <code>advance_paid</code></span>
+              </div>
+            </div>
+            <div class="g-ladder" aria-label="Worked example: 3,300 kg jaggery at ₹90 per kg">
+              <p class="g-ladder-title">Worked example: 3,300 kg jaggery at ₹90/kg</p>
+              <div class="g-rung">
+                <span><code>{{subtotal}}</code></span
+                ><b>₹2,97,000.00</b>
+              </div>
+              <div class="g-rung plus">
+                <span><code>{{transport_charges}}</code></span
+                ><b>+ ₹16,000.00</b>
+              </div>
+              <div class="g-rung total">
+                <span><code>{{grand_total}}</code></span
+                ><b>₹3,13,000.00</b>
+              </div>
+              <div class="g-rung minus">
+                <span><code>{{advance_paid}}</code></span
+                ><b>− ₹81,000.00</b>
+              </div>
+              <div class="g-rung total">
+                <span><code>{{balance_due}}</code></span
+                ><b>₹2,32,000.00</b>
+              </div>
+            </div>
+          </div>
+          <ul class="g-list">
+            <li>Charges only fill their own placeholder and add to the total. They never become item rows.</li>
+            <li>
+              <code>{{subtotal}}</code> stays filled when charges are set, so you can show Subtotal, then the charge,
+              then the total.
+            </li>
+            <li>
+              Wrap the advance and balance lines in <code>data-if="advance_paid"</code> so they only appear when an
+              advance was paid.
+            </li>
+            <li>
+              Rates are shown as plain numbers, so write the percent sign yourself: <code>Tax ({{tax_rate}}%)</code>.
+            </li>
+          </ul>
+        </section>
+
+        <!-- Images and CSS -->
+        <section id="images-css" class="g-section">
+          <h2>Images and CSS</h2>
+          <div class="g-cards two">
+            <div class="g-card">
+              <p class="g-card-title">Logos and signatures</p>
+              <pre class="g-code"><code>&lt;img src="<mark>{{business_logo}}</mark>" alt=""&gt;</code></pre>
+              <p class="g-muted">
+                The placeholder must be the whole <code>src</code>. The user uploads the image in the form. Fixed images
+                in your design must be embedded as <code>data:image/...</code>.
+              </p>
+            </div>
+            <div class="g-card">
+              <p class="g-card-title">Colours from a field</p>
+              <pre class="g-code"><code>:root { --accent: <mark>{{accent_color}}</mark>; }
+h1 { color: var(--accent); }</code></pre>
+              <p class="g-muted">
+                In CSS, placeholders only work inside custom properties like <code>--accent</code>. Anywhere else they
+                are dropped.
+              </p>
+            </div>
+          </div>
+          <p>
+            Put all CSS in one <code>&lt;style&gt;</code> tag in <code>&lt;head&gt;</code>. Use system fonts such as
+            <code>system-ui, "Segoe UI", Roboto, Arial, sans-serif</code>, or embed a font file as a
+            <code>data:</code> URI in <code>@font-face</code>. Fonts from the internet do not load. Inline SVG drawings
+            work well for logos and icons.
+          </p>
+        </section>
+
+        <!-- Page size -->
+        <section id="page-size" class="g-section">
+          <h2>Page size</h2>
+          <p>Declare the paper size with <code>@page</code>. Without it, the bill is A4.</p>
+          <div class="g-papers">
+            <figure class="g-paper-size">
+              <div class="g-sheet a4" aria-hidden="true"><span>210 × 297 mm</span></div>
+              <figcaption>
+                <strong>A4 invoice</strong>
+                <code>@page { size: A4; margin: 0; }</code>
+              </figcaption>
+            </figure>
+            <figure class="g-paper-size">
+              <div class="g-sheet a5" aria-hidden="true"><span>148 × 210</span></div>
+              <figcaption>
+                <strong>A5</strong>
+                <code>@page { size: A5; margin: 0; }</code>
+              </figcaption>
+            </figure>
+            <figure class="g-paper-size">
+              <div class="g-sheet thermal" aria-hidden="true"><span>80 mm</span></div>
+              <figcaption>
+                <strong>80 mm receipt</strong>
+                <code>@page { size: 80mm 297mm; margin: 0; }</code>
+              </figcaption>
+            </figure>
+          </div>
+          <ul class="g-list">
+            <li>Receipts need an explicit height. <code>size: 80mm auto</code> is not valid CSS.</li>
+            <li>Set the page margins as padding on <code>body</code>, and keep <code>@page</code> margin at 0.</li>
+            <li>Add <code>print-color-adjust: exact;</code> to <code>body</code> so background colours print.</li>
+            <li>Add <code>tr { break-inside: avoid; }</code> so item rows never split across two pages.</li>
+          </ul>
+        </section>
+
+        <!-- Metadata -->
+        <section id="metadata" class="g-section">
+          <h2>Labels and defaults</h2>
+          <p>
+            One optional JSON block names your template and sets labels, input types, default values and field order. It
+            is only read as data, never run.
+          </p>
+          <pre class="g-code"><code>&lt;script type="application/json" id="template-meta"&gt;
+{
+  "name": "My Invoice",
+  "version": "1.0",
+  "fields": {
+    "invoice_number": { "label": "Invoice #", "default": "INV-001" },
+    "footer_note": { "type": "textarea", "default": "Thank you for your business." },
+    "vehicle_number": { "label": "Vehicle no.", "placeholder": "JH 15 AB 1234" }
+  }
+}
+&lt;/script&gt;</code></pre>
+          <div class="g-props">
+            <div>
+              <code>name</code
+              ><span>Shown in the template menu. Uploading a file with the same name replaces your saved copy.</span>
+            </div>
+            <div><code>version</code><span>Shown when you replace a saved copy, e.g. "version 1.0 to 1.2".</span></div>
+            <div><code>label</code><span>Text above the input, instead of the name-based label.</span></div>
+            <div>
+              <code>default</code
+              ><span
+                >Filled in when a new bill starts. Your business profile wins for <code>business_</code> fields.</span
+              >
+            </div>
+            <div>
+              <code>type</code
+              ><span
+                ><code>text</code>, <code>textarea</code>, <code>date</code>, <code>tel</code>, <code>email</code>,
+                <code>image</code>, <code>currency</code>, <code>number</code> or <code>percent</code>.</span
+              >
+            </div>
+            <div><code>placeholder</code><span>Grey hint text inside the empty input.</span></div>
+            <div>
+              <code>order</code
+              ><span
+                >A list of field names at the top level (<code>"order": [...]</code>) sets the order in the form.</span
+              >
+            </div>
+          </div>
+        </section>
+
+        <!-- Rules -->
+        <section id="rules" class="g-section">
+          <h2>Rules and limits</h2>
+          <p>
+            Templates can come from anywhere, so every template is cleaned before use and bills are shown in a locked
+            frame. Anything not allowed is removed and listed in the upload report.
+          </p>
+          <div class="g-rules">
+            <div class="g-rule-col ok">
+              <p class="g-rule-title">Works</p>
+              <ul>
+                <li>Any HTML layout: tables, flexbox, grid</li>
+                <li>CSS in one <code>&lt;style&gt;</code> tag, plus <code>style=""</code> attributes</li>
+                <li>Images and fonts embedded as <code>data:</code> URIs</li>
+                <li>Inline <code>&lt;svg&gt;</code> drawings</li>
+                <li>Links to places in the same page (<code>href="#terms"</code>)</li>
+                <li>One file up to 2 MB</li>
+              </ul>
+            </div>
+            <div class="g-rule-col no">
+              <p class="g-rule-title">Removed</p>
+              <ul>
+                <li>JavaScript: <code>&lt;script&gt;</code> and <code>on...</code> attributes</li>
+                <li>Anything loaded from the internet: images, fonts, <code>@import</code>, links</li>
+                <li>Forms, inputs and buttons</li>
+                <li>Iframes, embeds, video and audio</li>
+                <li><code>&lt;link&gt;</code> and <code>&lt;meta&gt;</code> tags</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- Playground -->
+        <section id="playground" class="g-section g-playground">
+          <div class="g-pg-head">
+            <div>
+              <h2>Playground</h2>
+              <p>Edit the template and watch the form fields and the bill update. This uses the app's real engine.</p>
+            </div>
+            <div class="g-pg-examples" role="group" aria-label="Load an example">
+              <button type="button" class="btn small" data-example="invoice" aria-pressed="true">A4 invoice</button>
+              <button type="button" class="btn small" data-example="advance" aria-pressed="false">
+                Advance and balance
+              </button>
+              <button type="button" class="btn small" data-example="receipt" aria-pressed="false">80 mm receipt</button>
+            </div>
+          </div>
+          <div class="g-pg-grid">
+            <div class="g-pg-editor">
+              <label for="pg-code" class="g-col-label">Template HTML</label>
+              <textarea
+                id="pg-code"
+                class="code g-pg-code"
+                spellcheck="false"
+                autocapitalize="off"
+                autocomplete="off"
+              ></textarea>
+              <div class="row">
+                <button type="button" class="btn small" id="pg-copy">Copy</button>
+                <button type="button" class="btn small" id="pg-download">Download .html</button>
+                <span class="g-muted small" id="pg-status" aria-live="polite"></span>
+              </div>
+            </div>
+            <div class="g-pg-side">
+              <div class="g-pg-fields">
+                <p class="g-col-label">Form fields found</p>
+                <div id="pg-fields" aria-live="polite"></div>
+              </div>
+              <div class="g-pg-preview">
+                <p class="g-col-label">Bill with sample data</p>
+                <div class="g-pg-frame"><div class="preview-wrap" id="pg-preview"></div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Checklist -->
+        <section id="checklist" class="g-section">
+          <h2>Before you upload</h2>
+          <ul class="g-check">
+            <li>Every placeholder is spelled the way you want its label to read.</li>
+            <li>The item row has <code>data-repeat="items"</code> and the totals use <code>{{grand_total}}</code>.</li>
+            <li>Optional lines (GSTIN, discount, advance) are wrapped in <code>data-if</code>.</li>
+            <li><code>@page</code> sets your paper size, and a long bill still breaks cleanly between rows.</li>
+            <li>Images and fonts are embedded, not linked.</li>
+            <li>
+              The upload report shows no surprises under <b>Removed by the security filter</b> and no warnings like
+              <em>looks like a typo of {{grand_total}}</em>.
+            </li>
+          </ul>
+          <p class="g-end">Ready? <a href="../#/templates">Open Templates</a> and press <b>Upload .html</b>.</p>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
