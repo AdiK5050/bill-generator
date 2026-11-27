@@ -30,6 +30,7 @@ import {
   INTERVAL_CHOICES,
   isSyncing,
 } from '../sync/sync.js';
+import { APP_VERSION } from '../version.js';
 
 let root;
 let hooks;
@@ -62,6 +63,7 @@ export async function renderSettings() {
       appearanceSection(),
       backupSection(),
     ),
+    h('p', { class: 'app-version', text: `Bill Generator version ${APP_VERSION}` }),
   );
   refreshSyncStatus();
 }
