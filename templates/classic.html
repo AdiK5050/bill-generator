@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Classic Invoice</title>
+<script type="application/json" id="template-meta">
+{
+  "name": "Classic Invoice",
+  "version": "1.0",
+  "fields": {
+    "invoice_number": { "label": "Invoice #", "default": "INV-001" },
+    "invoice_due_date": { "label": "Due date" },
+    "tax_rate": { "label": "Tax rate (%)" },
+    "invoice_discount": { "label": "Discount" },
+    "payment_terms": { "type": "textarea", "default": "Payment due within 15 days." },
+    "footer_note": { "type": "textarea", "default": "Thank you for your business." }
+  }
+}
+</script>
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  body {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 14mm;
+    font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.45;
+    color: #1f2328;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10mm;
+    padding-bottom: 6mm;
+    border-bottom: 2px solid #1f2328;
+  }
+  .brand { display: flex; gap: 5mm; align-items: flex-start; }
+  .logo img { max-width: 32mm; max-height: 22mm; object-fit: contain; display: block; }
+  .business-name { font-size: 17pt; font-weight: 700; margin: 0 0 1mm; letter-spacing: 0.2px; }
+  .muted { color: #57606a; }
+  .small { font-size: 9pt; }
+  .doc-title { text-align: right; }
+  .doc-title h1 {
+    margin: 0 0 2mm;
+    font-size: 22pt;
+    font-weight: 300;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  .meta { border-collapse: collapse; margin-left: auto; }
+  .meta td { padding: 0.6mm 0 0.6mm 4mm; text-align: right; }
+  .meta td.label { color: #57606a; }
+  .parties { display: flex; justify-content: space-between; gap: 10mm; margin: 7mm 0; }
+  .party { flex: 1; }
+  .section-label {
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: #57606a;
+    margin: 0 0 1.5mm;
+  }
+  .party-name { font-weight: 600; font-size: 11.5pt; margin: 0 0 0.5mm; }
+  p { margin: 0; }
+  table.items { width: 100%; border-collapse: collapse; margin-top: 2mm; }
+  table.items th {
+    text-align: left;
+    font-size: 8.5pt;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: #1f2328;
+    padding: 2.2mm 2mm;
+    border-top: 1px solid #1f2328;
+    border-bottom: 1px solid #1f2328;
+    background: #f3f4f6;
+  }
+  table.items td { padding: 2.2mm 2mm; border-bottom: 1px solid #d8dee4; vertical-align: top; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.items th.num { text-align: right; }
+  table.items th.center { text-align: center; }
+  .idx { width: 9mm; color: #57606a; }
+  .bottom { display: flex; justify-content: space-between; gap: 10mm; margin-top: 6mm; break-inside: avoid; }
+  .notes { flex: 1; }
+  .notes .block { margin-bottom: 4mm; }
+  table.totals { width: 75mm; border-collapse: collapse; }
+  table.totals td { padding: 1.4mm 2mm; }
+  table.totals td.num { font-variant-numeric: tabular-nums; }
+  table.totals tr.grand td {
+    border-top: 2px solid #1f2328;
+    font-size: 12.5pt;
+    font-weight: 700;
+    padding-top: 2.4mm;
+  }
+  .words { margin-top: 3mm; font-size: 9.5pt; }
+  .words strong { font-weight: 600; }
+  .footer {
+    margin-top: 12mm;
+    padding-top: 4mm;
+    border-top: 1px solid #d8dee4;
+    text-align: center;
+    color: #57606a;
+    font-size: 9pt;
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand">
+      <div class="logo" data-if="business_logo"><img src="{{business_logo}}" alt="Logo"></div>
+      <div>
+        <p class="business-name">{{business_name}}</p>
+        <p class="muted small">{{business_address}}</p>
+        <p class="muted small" data-if="business_phone">Phone: {{business_phone}}</p>
+        <p class="muted small" data-if="business_email">Email: {{business_email}}</p>
+        <p class="muted small" data-if="business_gstin">GSTIN: {{business_gstin}}</p>
+      </div>
+    </div>
+    <div class="doc-title">
+      <h1>Invoice</h1>
+      <table class="meta">
+        <tr><td class="label">Invoice #</td><td>{{invoice_number}}</td></tr>
+        <tr><td class="label">Date</td><td>{{invoice_date}}</td></tr>
+        <tr data-if="invoice_due_date"><td class="label">Due date</td><td>{{invoice_due_date}}</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="parties">
+    <div class="party">
+      <p class="section-label">Bill to</p>
+      <p class="party-name">{{customer_name}}</p>
+      <p class="muted">{{customer_address}}</p>
+      <p class="muted" data-if="customer_phone">Phone: {{customer_phone}}</p>
+    </div>
+  </div>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th class="idx">#</th>
+        <th>Description</th>
+        <th class="num">Qty</th>
+        <th class="num">Price</th>
+        <th class="num">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr data-repeat="items">
+        <td class="idx">{{item.index}}</td>
+        <td>{{item.description}}</td>
+        <td class="num">{{item.qty}} {{item.unit}}</td>
+        <td class="num">{{item.price}}</td>
+        <td class="num">{{item.total}}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="bottom">
+    <div class="notes">
+      <div class="block" data-if="payment_terms">
+        <p class="section-label">Payment terms</p>
+        <p>{{payment_terms}}</p>
+      </div>
+      <div class="words">
+        <p class="section-label">Amount in words</p>
+        <p><strong>{{total_in_words}}</strong></p>
+      </div>
+    </div>
+    <table class="totals">
+      <tr><td>Subtotal</td><td class="num">{{subtotal}}</td></tr>
+      <tr data-if="tax_rate"><td>Tax ({{tax_rate}}%)</td><td class="num">{{tax_amount}}</td></tr>
+      <tr data-if="shipping_charges"><td>Shipping</td><td class="num">{{shipping_charges}}</td></tr>
+      <tr data-if="invoice_discount"><td>Discount</td><td class="num">- {{invoice_discount}}</td></tr>
+      <tr class="grand"><td>Total</td><td class="num">{{grand_total}}</td></tr>
+    </table>
+  </div>
+
+  <div class="footer" data-if="footer_note">{{footer_note}}</div>
+</body>
+</html>

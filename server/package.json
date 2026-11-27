@@ -1,0 +1,14 @@
+{
+  "name": "bill-generator-sync",
+  "version": "1.0.0",
+  "description": "Optional self-hosted sync server for Bill Generator",
+  "type": "module",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
