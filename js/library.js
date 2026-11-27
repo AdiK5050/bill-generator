@@ -55,7 +55,9 @@ export async function getTemplate(id) {
   } else {
     const rec = await getRecord('templates', id);
     if (!rec) throw new Error('Template not found.');
-    raw = rec.html;
+    // The stored HTML has no template-meta block (it is kept in rec.meta), so put it
+    // back before loading. Without it, field defaults, labels and types are lost.
+    raw = withMetaBlock(rec.html, rec.meta);
     key = `${id}@${rec.updatedAt}`;
     name = rec.name;
   }

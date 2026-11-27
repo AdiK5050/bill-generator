@@ -1,4 +1,5 @@
 import * as E from '../js/engine/index.js';
+import { withMetaBlock } from '../js/library.js';
 const results = [];
 const t = (name, fn) => {
   try {
@@ -204,6 +205,17 @@ t('no transport hides subtotal and charge lines', () => {
   const d = E.buildDisplayData(advanceTpl.parsed, { ...jaggery, values: {} });
   eq(d.values.grand_total, '₹2,97,000.00');
   ok(!E.renderBill(advanceTpl.html, d).includes('id="tr"'), 'hidden');
+});
+
+// stored user templates keep their template-meta
+t('meta survives save and load', () => {
+  const src = E.loadTemplate(`<html><head><script type="application/json" id="template-meta">
+{"name":"Meta test","version":"2","fields":{"footer_note":{"label":"Note","type":"textarea","default":"Incl. of all taxes."}}}
+</script></head><body><p>{{footer_note}}</p></body></html>`);
+  // library.saveTemplate stores src.html and src.meta separately; getTemplate joins them.
+  const back = E.loadTemplate(withMetaBlock(src.html, src.meta));
+  const f = back.parsed.fieldMap.footer_note;
+  eq([f.default, f.label, f.type, back.meta.version], ['Incl. of all taxes.', 'Note', 'textarea', '2']);
 });
 
 // built-in templates
