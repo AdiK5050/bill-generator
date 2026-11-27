@@ -7,6 +7,7 @@ export const RESERVED = new Set([
   'tax_amount',
   'grand_total',
   'total_in_words',
+  'balance_due',
 ]);
 
 /** tax_<name>_amount is reserved when tax_<name>_rate exists; tested separately. */
@@ -46,7 +47,8 @@ export function inferSection(name) {
 }
 
 export function inferType(name) {
-  const base = name.startsWith('item.') ? name.slice(5) : name;
+  // A trailing number only tells similar fields apart: business_phone_2 is still a phone.
+  const base = (name.startsWith('item.') ? name.slice(5) : name).replace(/_\d+$/, '');
   if (base === 'qty' || base === 'quantity') return 'number';
   if (base.endsWith('_date') || base === 'date') return 'date';
   if (/(^|_)(address|notes|terms)$/.test(base)) return 'textarea';
@@ -54,7 +56,7 @@ export function inferType(name) {
   if (/(^|_)email$/.test(base)) return 'email';
   if (/(^|_)(logo|image|signature)$/.test(base)) return 'image';
   if (base === 'tax_rate' || TAX_PART_RATE.test(base) || base.endsWith('_percent')) return 'percent';
-  if (/price|amount|charge|rate|discount/.test(base)) return 'currency';
+  if (/price|amount|charge|rate|discount/.test(base) || /(^|_)paid$/.test(base)) return 'currency';
   return 'text';
 }
 

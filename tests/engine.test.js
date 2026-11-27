@@ -91,6 +91,12 @@ t('types', () => {
   eq(p.fieldMap['business_logo'].type, 'image');
   eq(p.fieldMap['item.price'].type, 'currency');
 });
+t('numbered fields keep their type', () => {
+  eq(E.inferType('business_phone_2'), 'tel');
+  eq(E.inferType('customer_email_2'), 'email');
+  eq(E.inferType('business_address_2'), 'textarea');
+  eq(E.inferType('line_2'), 'text');
+});
 t('typo warning', () =>
   ok(
     p.warnings.some((w) => w.includes('grand_totl')),
@@ -148,6 +154,56 @@ t('values from another template do not affect totals', () => {
     items: [{ price: '100', qty: '1' }],
   });
   eq(d.totals.grand, 100);
+});
+
+// charges, advance and balance due
+const advanceTpl = E.loadTemplate(`<html><head><title>Advance test</title></head><body>
+<div class="items"><div class="item" data-repeat="items">{{item.description}}|{{item.price}}/{{item.unit}}|{{item.qty}} {{item.unit}}|{{item.total}}</div></div>
+<div data-if="transport_charges"><span id="sub">{{subtotal}}</span><span id="tr">+ {{transport_charges}}</span></div>
+<span id="grand">{{grand_total}}</span>
+<div data-if="advance_paid"><span id="adv">Advance<span data-if="advance_qty"> ({{advance_qty}})</span> - {{advance_paid}}</span><span id="bal">{{balance_due}}</span></div>
+</body></html>`);
+const jaggery = {
+  values: { transport_charges: '16000', advance_paid: '81000', advance_qty: '900 kg' },
+  items: [{ description: 'Jaggery', price: '90', unit: 'kg', qty: '3300' }],
+};
+t('balance_due is reserved, advance fields are inputs', () => {
+  const f = advanceTpl.parsed.fieldMap;
+  ok(f.balance_due.reserved, 'balance_due reserved');
+  ok(!f.advance_paid.reserved && !f.advance_qty.reserved, 'advance fields are inputs');
+  eq(f.advance_paid.type, 'currency');
+  eq(f.advance_qty.type, 'text');
+  eq(f.transport_charges.type, 'currency');
+});
+t('jaggery totals', () => {
+  const d = E.buildDisplayData(advanceTpl.parsed, jaggery);
+  eq(d.values.subtotal, '₹2,97,000.00');
+  eq(d.values.transport_charges, '₹16,000.00');
+  eq(d.values.grand_total, '₹3,13,000.00');
+  eq(d.values.advance_paid, '₹81,000.00');
+  eq(d.values.balance_due, '₹2,32,000.00');
+});
+t('charges never become item rows', () => {
+  const d = E.buildDisplayData(advanceTpl.parsed, jaggery);
+  eq(d.items.length, 1);
+  const out = E.renderBill(advanceTpl.html, d);
+  eq((out.match(/class="item"/g) || []).length, 1);
+  ok(out.includes('Jaggery|₹90.00/kg|3,300 kg|₹2,97,000.00'), out.match(/class="item">[^<]*/)?.[0]);
+  ok(out.includes('<span id="sub">₹2,97,000.00</span>'), 'subtotal shown with transport');
+  ok(out.replace(/<[^>]+>/g, '').includes('Advance (900 kg) - ₹81,000.00'), 'advance line');
+  ok(out.includes('<span id="bal">₹2,32,000.00</span>'), 'balance');
+  ok(!out.includes('{{'), 'leftover');
+});
+t('no advance hides advance and balance lines', () => {
+  const d = E.buildDisplayData(advanceTpl.parsed, { ...jaggery, values: { transport_charges: '16000' } });
+  eq(d.values.balance_due, '₹3,13,000.00');
+  const out = E.renderBill(advanceTpl.html, d);
+  ok(!out.includes('id="adv"') && !out.includes('id="bal"'), 'hidden');
+});
+t('no transport hides subtotal and charge lines', () => {
+  const d = E.buildDisplayData(advanceTpl.parsed, { ...jaggery, values: {} });
+  eq(d.values.grand_total, '₹2,97,000.00');
+  ok(!E.renderBill(advanceTpl.html, d).includes('id="tr"'), 'hidden');
 });
 
 // built-in templates

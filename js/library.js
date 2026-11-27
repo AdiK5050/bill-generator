@@ -25,10 +25,10 @@ async function builtinRaw(b) {
   return rawCache.get(b.id);
 }
 
-/** List all templates as { id, name, builtin, updatedAt }. */
+/** List all templates as { id, name, builtin, updatedAt, version }. */
 export async function listTemplates() {
   const user = (await listRecords('templates'))
-    .map((t) => ({ id: t.id, name: t.name, builtin: false, updatedAt: t.updatedAt }))
+    .map((t) => ({ id: t.id, name: t.name, builtin: false, updatedAt: t.updatedAt, version: t.meta?.version }))
     .sort((a, b) => a.name.localeCompare(b.name));
   return [...BUILTINS.map((b) => ({ id: b.id, name: b.name, builtin: true, updatedAt: 0 })), ...user];
 }

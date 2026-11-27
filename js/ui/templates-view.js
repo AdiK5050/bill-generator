@@ -138,10 +138,24 @@ async function uploadTemplate() {
   try {
     const html = await file.text();
     const loaded = loadTemplate(html);
-    const ok = await showReport('Upload template', loaded, { confirmLabel: 'Save template' });
+    const name = loaded.meta.name || file.name.replace(/\.html?$/i, '');
+    // A newer version of a template you already uploaded replaces it, so bills
+    // made with that template pick up the new layout and no stale copy is left behind.
+    const existing = (await listTemplates()).find((t) => !t.builtin && t.name === name);
+    let title = 'Upload template';
+    let confirmLabel = 'Save template';
+    if (existing) {
+      const oldVersion = existing.version;
+      const newVersion = loaded.meta.version;
+      const from = oldVersion ? `version ${oldVersion}` : 'saved copy';
+      const to = newVersion ? `version ${newVersion}` : 'uploaded file';
+      title = `Update "${name}" (${from} to ${to})`;
+      confirmLabel = 'Replace template';
+    }
+    const ok = await showReport(title, loaded, { confirmLabel });
     if (!ok) return;
-    await saveTemplate({ name: loaded.meta.name || file.name.replace(/\.html?$/i, ''), html });
-    toast('Template saved.');
+    await saveTemplate({ id: existing?.id, name, html });
+    toast(existing ? 'Template updated.' : 'Template saved.');
     await renderLibrary();
     hooks.onLibraryChanged();
   } catch (e) {

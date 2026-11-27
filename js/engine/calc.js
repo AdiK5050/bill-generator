@@ -33,16 +33,31 @@ export function computeTotals(input) {
   }
   tax = round2(tax);
 
+  // _charges and _discount fields only change grand_total. They are never item rows.
+  // _paid fields (e.g. advance_paid) do not change grand_total; they reduce balance_due.
   let charges = 0;
   let discounts = 0;
+  let paid = 0;
   for (const [name, raw] of Object.entries(values)) {
     const n = toNumber(raw);
     if (n === null) continue;
     if (name.endsWith('_charges')) charges += n;
     else if (name.endsWith('_discount') || name === 'discount') discounts += n;
+    else if (name.endsWith('_paid')) paid += n;
   }
   const grand = round2(subtotal + tax + charges - discounts);
-  return { items, subtotal, tax, taxParts, charges: round2(charges), discounts: round2(discounts), grand };
+  const balance = round2(grand - paid);
+  return {
+    items,
+    subtotal,
+    tax,
+    taxParts,
+    charges: round2(charges),
+    discounts: round2(discounts),
+    grand,
+    paid: round2(paid),
+    balance,
+  };
 }
 
 /**
@@ -100,13 +115,15 @@ export function buildDisplayData(parsed, input, fmt = DEFAULT_FORMAT) {
   });
 
   const hasItems = totals.items.some((r) => r.total !== null);
-  values.subtotal = hasItems ? formatCurrency(totals.subtotal, fmt) : '';
+  // Subtotal is shown whenever there is a total, including when only charges are set.
+  values.subtotal = hasItems || totals.charges ? formatCurrency(totals.subtotal, fmt) : '';
   values.tax_amount = totals.tax ? formatCurrency(totals.tax, fmt) : '';
   for (const [name, amount] of Object.entries(totals.taxParts)) {
     values[name] = amount ? formatCurrency(amount, fmt) : '';
   }
   values.grand_total = hasItems || totals.charges ? formatCurrency(totals.grand, fmt) : '';
   values.total_in_words = values.grand_total ? amountToWords(totals.grand, fmt) : '';
+  values.balance_due = values.grand_total ? formatCurrency(totals.balance, fmt) : '';
 
   return { values, items, totals };
 }

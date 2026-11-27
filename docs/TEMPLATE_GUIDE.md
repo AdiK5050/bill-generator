@@ -27,9 +27,11 @@ Values are always inserted as plain text, never as HTML. Line breaks in multi-li
 | ends with `_email` | email |
 | ends with `_logo`, `_image`, `_signature` | image upload |
 | `tax_rate`, `tax_<name>_rate`, ends with `_percent` | percentage number |
-| contains `price`, `amount`, `charge`, `rate`, `discount` | currency number |
+| contains `price`, `amount`, `charge`, `rate`, `discount`, or ends with `_paid` | currency number |
 | `item.qty` | number |
 | anything else | single-line text |
+
+A number at the end of the name is ignored for this, so `business_phone_2` is still a phone field.
 
 ### Form sections from the prefix
 
@@ -82,10 +84,13 @@ These are filled by the app and never appear in the form.
 | `{{tax_amount}}` | subtotal x `tax_rate` / 100, plus all `tax_<name>_amount` values |
 | `{{grand_total}}` | subtotal + tax + fields ending in `_charges` minus fields ending in `_discount` |
 | `{{total_in_words}}` | grand total in words |
+| `{{balance_due}}` | grand total minus fields ending in `_paid` (e.g. `advance_paid`) |
 
 Rates are shown as plain numbers, so write the percent sign yourself: `Tax ({{tax_rate}}%)`.
 
-Discounts: name the field so it ends in `_discount`, for example `invoice_discount`. Extra charges end in `_charges`, for example `shipping_charges`.
+Discounts: name the field so it ends in `_discount`, for example `invoice_discount`. Extra charges end in `_charges`, for example `shipping_charges`. A charge only fills its own placeholder and adds to `{{grand_total}}`; it never becomes a row in the items list. `{{subtotal}}` stays filled when charges are set, so you can show Subtotal, then the charge, then the total.
+
+Payments already received: name the field so it ends in `_paid`, for example `advance_paid`. It does not change `{{grand_total}}`; it is subtracted to give `{{balance_due}}`. Wrap the advance and balance lines in `data-if="advance_paid"` so they only appear when an advance was paid.
 
 ## 6. Images, CSS and attributes
 
