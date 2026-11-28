@@ -188,11 +188,10 @@ export function createAiPanel(host, { placeholder } = {}) {
     const ai = await getActiveAi();
     const changed =
       !active || !ai || ai.provider !== active.provider || ai.model !== active.model || ai.apiKey !== active.apiKey;
-    if (changed) {
-      // A different provider, model or key starts a new conversation.
-      assistant = null;
-      active = ai;
-    }
+    // A different provider, model or key starts a new conversation.
+    if (changed) assistant = null;
+    // Always keep the latest settings (they also hold which notices were seen).
+    active = ai;
     setupNote.hidden = Boolean(ai);
     if (!ai) {
       const [cfg, sync] = await Promise.all([getAiConfig(), getKeySyncState()]);
@@ -276,7 +275,8 @@ export function createAiPanel(host, { placeholder } = {}) {
   async function confirmNotice(ai) {
     // Shown once per provider, since what happens to the data differs. (An older version
     // stored a single true for all providers.)
-    const seen = ai.config.noticeSeen;
+    // Read the stored settings, not a copy taken earlier: Continue saves noticeSeen there.
+    const seen = (await getAiConfig()).noticeSeen;
     if (seen === true || seen?.[ai.provider]) return true;
     const gemini = ai.provider === 'gemini';
     const r = await dialog({
