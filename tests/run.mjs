@@ -2,14 +2,26 @@
 // Runs tests/engine.test.html in headless Chrome and reports results.
 // Uses the system Chrome (channel "chrome"); set CHROME_PATH to use another Chromium binary.
 import { chromium } from 'playwright-core';
+import { readFile } from 'node:fs/promises';
 import { startServer } from '../tools/serve.mjs';
+import { APP_VERSION } from '../js/version.js';
+
+let failed = 0;
+
+// The version shown in Settings must match package.json.
+const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+if (pkg.version === APP_VERSION) {
+  console.log(`PASS :: app version ${APP_VERSION} matches package.json`);
+} else {
+  console.log(`FAIL :: js/version.js says ${APP_VERSION} but package.json says ${pkg.version}`);
+  failed++;
+}
 
 const server = await startServer(0);
 const { port } = server.address();
 const browser = await chromium.launch(
   process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'chrome' },
 );
-let failed = 0;
 try {
   const page = await browser.newPage();
   page.on('pageerror', (e) => {

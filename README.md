@@ -41,6 +41,8 @@ Then in the app: Settings > Account and server backup > Sign in to a server. See
 
 Upload the repository (minus `server/`, `node_modules/`, `tests/`, `tools/`) to any static host with HTTPS, for example GitHub Pages, Netlify or Vercel. When you change any app file, bump `CACHE_VERSION` in `sw.js` so installed apps pick up the update.
 
+For a release, set the same version in `package.json` and `js/version.js` (shown in Settings; `npm test` fails if they differ), then tag it, for example `git tag -a v0.1.0 -m "First public version"`.
+
 ## Project layout
 
 ```
