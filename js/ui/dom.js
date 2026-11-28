@@ -65,6 +65,8 @@ export function dialog({ title, body, buttons = [{ label: 'OK', value: true, pri
               class: `btn${b.primary ? ' primary' : ''}${b.danger ? ' danger' : ''}`,
               value: String(b.value),
               type: 'submit',
+              // Cancel must close the dialog even when required fields are empty.
+              formnovalidate: b.value === 'cancel',
             },
             b.label,
           ),
