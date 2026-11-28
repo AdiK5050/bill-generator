@@ -1,6 +1,6 @@
 // Service worker: caches the app shell so the app works offline after the first load.
 // Bump CACHE_VERSION whenever any file in APP_SHELL changes.
-const CACHE_VERSION = 'v9';
+const CACHE_VERSION = 'v22';
 const CACHE_NAME = `bill-generator-${CACHE_VERSION}`;
 
 const APP_SHELL = [
@@ -24,8 +24,13 @@ const APP_SHELL = [
   'js/engine/parser.js',
   'js/engine/renderer.js',
   'js/engine/sanitizer.js',
+  'js/ai/config.js',
+  'js/ai/key-sync.js',
+  'js/ai/providers.js',
+  'js/ai/template-assistant.js',
   'js/sync/account.js',
   'js/sync/sync.js',
+  'js/ui/ai-panel.js',
   'js/ui/bill-view.js',
   'js/ui/dom.js',
   'js/ui/form.js',

@@ -248,6 +248,15 @@ main {
   border-color: var(--accent);
   color: var(--accent-text);
 }
+/* The template the Bill page is using: shown as a status, not a disabled action. */
+.btn.in-use:disabled {
+  opacity: 1;
+  cursor: default;
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent);
+  font-weight: 650;
+}
 .btn.danger {
   color: var(--danger);
 }
@@ -712,6 +721,142 @@ select.input {
 .editor-problems.warn {
   color: var(--warn);
 }
+.preview-wrap.proposal {
+  outline: 2px dashed var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+/* ---------- AI assistant side panel ---------- */
+/* Slides over the code from the left so the preview stays visible. */
+.ai-drawer {
+  position: fixed;
+  top: var(--header-h);
+  bottom: 0;
+  left: 0;
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(440px, 100vw);
+  padding: 14px 16px max(14px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  box-shadow: 8px 0 24px rgb(16 24 40 / 16%);
+  transform: translateX(-104%);
+  visibility: hidden;
+  transition:
+    transform 0.2s ease,
+    visibility 0.2s;
+}
+.ai-drawer.open {
+  transform: none;
+  visibility: visible;
+}
+.ai-drawer [hidden],
+.ai-proposal[hidden] {
+  display: none;
+}
+.ai-toggle.has-news::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.ai-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ai-title {
+  flex: 1;
+  min-width: 0;
+}
+.ai-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.ai-close {
+  min-width: 36px;
+}
+.ai-log {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.ai-msg {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ai-msg p {
+  margin: 0;
+}
+.ai-msg.user {
+  align-self: flex-end;
+  background: var(--accent-soft);
+}
+.ai-msg.assistant {
+  align-self: flex-start;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.ai-msg.status {
+  align-self: center;
+  padding: 2px 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.ai-msg.error {
+  align-self: stretch;
+  max-width: none;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+.ai-proposal,
+.ai-setup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  background: var(--accent-soft);
+  border-radius: 8px;
+}
+.ai-proposal-text,
+.ai-setup p {
+  flex: 1 1 260px;
+  margin: 0;
+  font-size: 0.92rem;
+}
+.ai-proposal-editor {
+  margin: 0 0 12px;
+}
+.ai-composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-top: auto;
+}
+.ai-input {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+}
+.ai-actions {
+  display: flex;
+  gap: 6px;
+}
 
 /* ---------- Dialog, toast ---------- */
 .modal {
@@ -830,6 +975,10 @@ select.input {
   .view-bill[data-tab='preview'] .form-pane {
     display: none;
   }
+  .editor[data-tab='code'] .preview-pane,
+  .editor[data-tab='preview'] .editor-pane {
+    display: none;
+  }
   .preview-pane {
     position: static;
     height: auto;
@@ -851,6 +1000,12 @@ select.input {
   }
   .app-header {
     justify-content: space-between;
+  }
+  /* The AI panel ends above the bottom tab bar. */
+  .ai-drawer {
+    bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
+    padding-bottom: 14px;
+    border-right: 0;
   }
   /* Bottom tab bar: main navigation within thumb reach on phones. */
   .app-nav {

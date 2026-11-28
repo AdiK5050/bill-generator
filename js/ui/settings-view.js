@@ -31,6 +31,19 @@ import {
   isSyncing,
 } from '../sync/sync.js';
 import { APP_VERSION } from '../version.js';
+import { getAiConfig, setAiConfig, PROVIDERS } from '../ai/config.js';
+import { testKey } from '../ai/providers.js';
+import {
+  getKeySyncState,
+  readSyncedKey,
+  saveSyncedKey,
+  removeSyncedKey,
+  createPassphrase,
+  unlock,
+  lockDevice,
+  forgetKeySyncOnDevice,
+  MIN_PASSPHRASE_LENGTH,
+} from '../ai/key-sync.js';
 
 let root;
 let hooks;
@@ -45,11 +58,12 @@ export function initSettingsView(el, { onDataChanged, onErased }) {
 }
 
 export async function renderSettings() {
-  const [settings, profile, account, syncCfg] = await Promise.all([
+  const [settings, profile, account, syncCfg, aiCfg] = await Promise.all([
     getSettings(),
     getProfile(),
     getAccount(),
     getSyncConfig(),
+    getAiConfig(),
   ]);
   root.replaceChildren(
     h('div', { class: 'view-head' }, h('h2', { text: 'Settings' })),
@@ -60,6 +74,7 @@ export async function renderSettings() {
       profileSection(profile),
       numberingSection(settings),
       formatSection(settings),
+      aiSection(aiCfg, account),
       appearanceSection(),
       backupSection(),
     ),
@@ -306,6 +321,12 @@ async function signInFlow({ serverUrl = '', username = '', reauth = false } = {}
           { okLabel: 'Merge and sign in' },
         );
         if (!merge) return;
+        // Synced API keys belong to one account and are encrypted with its passphrase. Keep
+        // them only when signing back in to the account this device last used, so another
+        // account's keys are never uploaded over this one's.
+        const previousOwner = account.mode === 'user' ? account.user?.username : account.lastUsername;
+        const previousUrl = account.mode === 'user' ? account.serverUrl : account.lastServerUrl;
+        if (previousOwner !== next.user.username || previousUrl !== url) await forgetKeySyncOnDevice();
         await resetSyncState();
         await markAllDirty();
       }
@@ -349,6 +370,7 @@ async function signOutFlow() {
   await resetSyncState();
   if (r === 'erase') {
     await eraseSyncedData();
+    await lockDevice(); // the device's copy of the sync passphrase key goes too
     // The open bill and its saved draft hold customer and business details too.
     await hooks.onErased?.();
   }
@@ -430,6 +452,7 @@ function profileSection(profile) {
         onclick: async () => {
           await saveProfile(values);
           toast('Business profile saved.');
+          hooks.onDataChanged(); // fill the new details into the open bill
         },
       }),
     ),
@@ -561,6 +584,361 @@ function formatSection(s) {
       }),
     ),
   );
+}
+
+// ---------- AI assistant ----------
+
+function aiSection(cfg, account) {
+  const signedIn = account.mode === 'user';
+  const providerSel = h(
+    'select',
+    { class: 'input' },
+    Object.entries(PROVIDERS).map(([id, p]) =>
+      h('option', { value: id, text: p.label, selected: cfg.provider === id }),
+    ),
+  );
+  const keyInput = h('input', {
+    class: 'input',
+    type: 'password',
+    autocomplete: 'off',
+    spellcheck: 'false',
+    autocapitalize: 'off',
+    placeholder: 'Paste your API key',
+  });
+  const modelSel = h('select', { class: 'input' });
+  const keyHint = h('small', { class: 'muted' });
+  const keyStatus = h('p', { class: 'small ai-key-status', 'aria-live': 'polite' });
+  const info = h('p', { class: 'muted small', 'aria-live': 'polite' });
+  const freeTierNote = h('p', {
+    class: 'warn small',
+    text: "Gemini free tier: Google may use your requests to improve its products, and people at Google may read them. Google's terms also allow only paid use in the European Economic Area, Switzerland and the UK.",
+  });
+
+  // Where a new key is kept. Syncing is only offered when signed in to a server.
+  const scopeRadio = (value, label, checked) =>
+    h(
+      'label',
+      { class: 'check' },
+      h('input', { type: 'radio', name: 'ai-key-scope', value, checked }),
+      h('span', { text: label }),
+    );
+  const scopeGroup = h(
+    'div',
+    { class: 'field', role: 'radiogroup', 'aria-label': 'Where to keep the key', hidden: !signedIn },
+    h('span', { text: 'Keep the key' }),
+    scopeRadio('device', 'On this device only', true),
+    scopeRadio('all', 'On all my devices (encrypted with your sync passphrase)', false),
+  );
+  const scope = () => scopeGroup.querySelector('input[name="ai-key-scope"]:checked')?.value || 'device';
+
+  const unlockBtn = h('button', { type: 'button', class: 'btn small', text: 'Enter passphrase', hidden: true });
+  const forgetBtn = h('button', {
+    type: 'button',
+    class: 'btn small ghost',
+    text: 'Forget passphrase on this device',
+    hidden: true,
+  });
+
+  let sync = { exists: false, unlocked: false, providers: [] };
+  let syncedKey = null; // the decrypted synced key for the shown provider, when unlocked
+
+  // The saved keys are never put back into the page; only their last 4 characters are shown.
+  const fill = async () => {
+    const id = providerSel.value;
+    const p = PROVIDERS[id];
+    keyInput.value = '';
+    keyHint.textContent = p.keyHint;
+    modelSel.replaceChildren(
+      ...p.models.map((m) => h('option', { value: m.id, text: m.label, selected: cfg.models[id] === m.id })),
+    );
+    freeTierNote.hidden = id !== 'gemini';
+    sync = await getKeySyncState();
+    syncedKey = sync.providers.includes(id) ? await readSyncedKey(id) : null;
+    const local = cfg.keys[id];
+    const hasSynced = sync.providers.includes(id);
+    const parts = [];
+    if (local) parts.push(`Saved on this device (ends in ${local.slice(-4)}).`);
+    if (hasSynced && syncedKey) {
+      parts.push(
+        local
+          ? `A key is also synced to your other devices (ends in ${syncedKey.slice(-4)}); this device uses its own.`
+          : `Synced to all your devices (ends in ${syncedKey.slice(-4)}).`,
+      );
+    } else if (hasSynced) {
+      parts.push(
+        local
+          ? 'A key is also synced from your other devices; this device uses its own.'
+          : 'A key is synced from your other devices. Enter your sync passphrase to use it here.',
+      );
+    }
+    keyStatus.textContent = parts.length ? parts.join(' ') : 'No key saved yet.';
+    // Default the choice to where this provider's key already lives.
+    const preferAll = signedIn && hasSynced && !local;
+    scopeGroup.querySelector(`input[value="${preferAll ? 'all' : 'device'}"]`).checked = true;
+    keyStatus.classList.toggle('muted', parts.length === 0);
+    unlockBtn.hidden = !(sync.exists && !sync.unlocked);
+    forgetBtn.hidden = !(sync.exists && sync.unlocked);
+  };
+  providerSel.addEventListener('change', () => {
+    info.textContent = '';
+    fill();
+  });
+
+  /** Make sure this device can encrypt synced keys: set or enter the passphrase. */
+  const ensureUnlocked = async () => {
+    // Fetch the server's copy first. Deciding from a stale local copy would set a second
+    // passphrase (or write a stale key list) over the keys another device already synced.
+    await pullSyncedKeys();
+    const state = await getKeySyncState();
+    if (state.unlocked) return true;
+    return state.exists ? unlockFlow() : createPassphraseFlow();
+  };
+
+  const save = async () => {
+    const provider = providerSel.value;
+    const key = keyInput.value.trim();
+    const models = { ...cfg.models, [provider]: modelSel.value };
+    if (!key) {
+      if (!cfg.keys[provider] && !sync.providers.includes(provider)) throw new Error('Paste an API key first.');
+      cfg = await setAiConfig({ provider, models });
+      return 'AI assistant settings saved.';
+    }
+    if (signedIn && scope() === 'all') {
+      if (!(await ensureUnlocked())) return null;
+      info.textContent = 'Encrypting...';
+      await saveSyncedKey(provider, key);
+      // This device now uses the synced key, so drop its own copy.
+      cfg = await setAiConfig({ provider, models, keys: { ...cfg.keys, [provider]: '' } });
+      info.textContent = '';
+      return 'Key saved, encrypted, for all your devices. It reaches them on their next sync.';
+    }
+    cfg = await setAiConfig({ provider, models, keys: { ...cfg.keys, [provider]: key } });
+    return 'AI assistant settings saved.';
+  };
+
+  const removeKey = async () => {
+    const provider = providerSel.value;
+    const label = PROVIDERS[provider].label;
+    const local = Boolean(cfg.keys[provider]);
+    const synced = sync.providers.includes(provider);
+    if (!local && !synced) {
+      info.textContent = 'No key is saved for this provider.';
+      return;
+    }
+    let which = local ? 'device' : 'all';
+    if (local && synced) {
+      const r = await dialog({
+        title: 'Remove which key?',
+        body: h('p', { text: `There is a ${label} key on this device and one synced to all your devices.` }),
+        buttons: [
+          { label: 'Cancel', value: 'cancel' },
+          { label: 'From all devices', value: 'all', danger: true },
+          { label: 'This device only', value: 'device', primary: true },
+        ],
+      });
+      if (r !== 'device' && r !== 'all') return;
+      which = r;
+    } else if (
+      !(await confirmDialog(
+        'Remove API key?',
+        which === 'all'
+          ? `The ${label} key will be removed from all your devices.`
+          : `The ${label} key will be deleted from this device.`,
+        { okLabel: 'Remove', danger: true },
+      ))
+    ) {
+      return;
+    }
+    if (which === 'all') {
+      // Remove from the server's current list, not a stale local one.
+      try {
+        if (signedIn) await pullSyncedKeys();
+      } catch (e) {
+        info.textContent = e.message;
+        return;
+      }
+      await removeSyncedKey(provider);
+    } else cfg = await setAiConfig({ keys: { ...cfg.keys, [provider]: '' } });
+    await fill();
+    toast('API key removed.');
+  };
+
+  unlockBtn.addEventListener('click', async () => {
+    if (await unlockFlow()) {
+      await fill();
+      toast('Synced keys unlocked on this device.');
+    }
+  });
+  forgetBtn.addEventListener('click', async () => {
+    if (
+      !(await confirmDialog(
+        'Forget the passphrase on this device?',
+        'Synced keys stay on your server, encrypted. To use them here again, enter the passphrase.',
+        { okLabel: 'Forget' },
+      ))
+    )
+      return;
+    await lockDevice();
+    await fill();
+  });
+
+  // Keys added or removed on another device arrive through sync. Settings is redrawn often,
+  // so a replaced card stops listening.
+  const onChanged = () => {
+    if (root.contains(card_)) fill();
+    else window.removeEventListener('ai-config-changed', onChanged);
+  };
+  window.addEventListener('ai-config-changed', onChanged);
+
+  const card_ = card(
+    'AI assistant',
+    h('p', {
+      class: 'muted',
+      text: 'Use your own Claude or Gemini API key to create and edit templates by describing what you want. Usage is billed to your account with that provider.',
+    }),
+    h('div', { class: 'grid2' }, field('Provider', providerSel), field('Model', modelSel)),
+    h('label', { class: 'field' }, h('span', { text: 'API key' }), keyInput, keyHint),
+    keyStatus,
+    scopeGroup,
+    freeTierNote,
+    h('p', {
+      class: 'muted small',
+      text: signedIn
+        ? 'A key kept on this device never leaves it. A key kept on all your devices is encrypted on this device before it is synced, so your server only stores scrambled data. Keys are never included in backup files. The assistant sends only the template and your request, never your bills or customers.'
+        : 'Your key is stored only on this device and is never included in backup files. The assistant sends only the template and your request, never your bills or customers.',
+    }),
+    info,
+    h(
+      'div',
+      { class: 'row' },
+      h('button', {
+        type: 'button',
+        class: 'btn primary',
+        text: 'Save',
+        onclick: async () => {
+          try {
+            const msg = await save();
+            if (msg) {
+              await fill();
+              toast(msg);
+            }
+          } catch (e) {
+            info.textContent = e.message;
+          }
+        },
+      }),
+      h('button', {
+        type: 'button',
+        class: 'btn',
+        text: 'Test key',
+        onclick: async () => {
+          const provider = providerSel.value;
+          const apiKey = keyInput.value.trim() || cfg.keys[provider] || syncedKey;
+          if (!apiKey) {
+            info.textContent = 'Paste an API key first.';
+            return;
+          }
+          info.textContent = 'Checking...';
+          try {
+            await testKey({ provider, apiKey, model: modelSel.value });
+            info.textContent = `The key works with ${modelSel.selectedOptions[0]?.textContent || modelSel.value}.${keyInput.value.trim() ? ' Press Save to keep it.' : ''}`;
+          } catch (e) {
+            info.textContent = e.message;
+          }
+        },
+      }),
+      h('button', { type: 'button', class: 'btn ghost', text: 'Remove key', onclick: removeKey }),
+    ),
+    signedIn ? h('div', { class: 'row' }, unlockBtn, forgetBtn) : null,
+  );
+  fill();
+  return card_;
+}
+
+/** Sync now so the local copy of the synced keys matches the server. Throws when it cannot. */
+async function pullSyncedKeys() {
+  const res = await syncNow();
+  if (res?.error) throw new Error(`Could not reach your sync server to check your synced keys: ${res.error}`);
+  if (res?.skipped) throw new Error('Connect to your sync server to change synced keys.');
+}
+
+/** Ask for the sync passphrase for the first time. Resolves true when set. */
+async function createPassphraseFlow() {
+  const pass1 = h('input', {
+    class: 'input',
+    type: 'password',
+    autocomplete: 'new-password',
+    required: true,
+    minlength: String(MIN_PASSPHRASE_LENGTH),
+  });
+  const pass2 = h('input', { class: 'input', type: 'password', autocomplete: 'new-password', required: true });
+  const err = h('p', { class: 'warn small', 'aria-live': 'polite' });
+  const body = h(
+    'div',
+    { class: 'stack' },
+    h('p', {
+      text: 'Your API keys are encrypted with this passphrase before they are synced, so your server cannot read them. You enter it once on each device.',
+    }),
+    h('p', {
+      class: 'warn small',
+      text: 'It cannot be recovered. If you forget it, remove the synced keys and add them again with a new passphrase.',
+    }),
+    field('Sync passphrase', pass1, `At least ${MIN_PASSPHRASE_LENGTH} characters. Do not reuse your server password.`),
+    field('Type it again', pass2),
+    err,
+  );
+  for (;;) {
+    const r = await dialog({
+      title: 'Set a sync passphrase',
+      body,
+      buttons: [
+        { label: 'Cancel', value: 'cancel' },
+        { label: 'Set passphrase', value: 'ok', primary: true },
+      ],
+    });
+    if (r !== 'ok') return false;
+    if (pass1.value !== pass2.value) {
+      err.textContent = 'The two passphrases do not match.';
+      continue;
+    }
+    try {
+      await createPassphrase(pass1.value);
+      return true;
+    } catch (e) {
+      err.textContent = e.message;
+    }
+  }
+}
+
+/** Ask for the existing sync passphrase. Resolves true when this device is unlocked. */
+async function unlockFlow() {
+  const pass = h('input', { class: 'input', type: 'password', autocomplete: 'current-password', required: true });
+  const err = h('p', { class: 'warn small', 'aria-live': 'polite' });
+  const body = h(
+    'div',
+    { class: 'stack' },
+    h('p', { text: 'Enter the sync passphrase you set on your other device to use your synced API keys here.' }),
+    field('Sync passphrase', pass),
+    err,
+  );
+  for (;;) {
+    const r = await dialog({
+      title: 'Enter your sync passphrase',
+      body,
+      buttons: [
+        { label: 'Cancel', value: 'cancel' },
+        { label: 'Unlock', value: 'ok', primary: true },
+      ],
+    });
+    if (r !== 'ok') return false;
+    try {
+      await unlock(pass.value);
+      return true;
+    } catch (e) {
+      err.textContent = e.message;
+      pass.value = '';
+    }
+  }
 }
 
 // ---------- Appearance ----------

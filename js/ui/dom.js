@@ -73,6 +73,17 @@ export function dialog({ title, body, buttons = [{ label: 'OK', value: true, pri
         ),
       ),
     );
+    // Enter in a text field submits the form with its first button, which is Cancel. Make Enter
+    // press the main button instead (that also runs the browser's required-field checks).
+    form.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || e.isComposing || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!(e.target instanceof HTMLInputElement) || ['button', 'submit', 'checkbox', 'radio'].includes(e.target.type))
+        return;
+      const main = form.querySelector('.modal-actions .btn.primary');
+      if (!main) return;
+      e.preventDefault();
+      main.click();
+    });
     dlg.append(form);
     document.body.append(dlg);
     dlg.addEventListener('close', () => {

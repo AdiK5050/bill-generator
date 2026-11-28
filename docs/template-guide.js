@@ -153,7 +153,7 @@ const EXAMPLES = {
   "fields": { "footer_note": { "default": "Thank you! Visit again." } } }
 </script>
 <style>
-  @page { size: 80mm 297mm; margin: 0; }
+  @page { size: 80mm auto; margin: 0; }
   * { box-sizing: border-box; }
   body { margin: 0; width: 80mm; padding: 5mm 4mm;
          font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 9pt; color: #000; }

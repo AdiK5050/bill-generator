@@ -10,6 +10,10 @@
 const DB_NAME = 'bill-generator';
 const DB_VERSION = 1;
 export const SYNCED_STORES = ['templates', 'bills', 'kv'];
+// Synced kv records that never go into backup files, and are ignored when importing one:
+// aiKeys holds API keys, encrypted with the user's sync passphrase.
+const NO_BACKUP_KV = new Set(['aiKeys']);
+const inBackup = (store, id) => !(store === 'kv' && NO_BACKUP_KV.has(id));
 
 let dbPromise = null;
 const listeners = new Set();
@@ -135,6 +139,15 @@ export async function deleteRecord(store, id) {
   emit({ store, id, source: 'local' });
 }
 
+/**
+ * Remove a record from this device only, without a tombstone, so nothing syncs. Used for
+ * records that belong to a previous account and must not be uploaded to a new one.
+ */
+export async function forgetRecord(store, id) {
+  await tx([store], 'readwrite', (t) => reqToPromise(t.objectStore(store).delete(id)));
+  emit({ store, id, source: 'local' });
+}
+
 export async function getKv(id, fallback = null) {
   const rec = await getRecord('kv', id);
   return rec ? rec.value : fallback;
@@ -153,6 +166,10 @@ export async function getLocal(id, fallback = null) {
 
 export async function setLocal(id, value) {
   await tx(['local'], 'readwrite', (t) => reqToPromise(t.objectStore('local').put({ id, value })));
+}
+
+export async function deleteLocal(id) {
+  await tx(['local'], 'readwrite', (t) => reqToPromise(t.objectStore('local').delete(id)));
 }
 
 export async function getDeviceId() {
@@ -257,11 +274,13 @@ export async function eraseSyncedData() {
 export async function exportBackup() {
   const data = {};
   for (const store of SYNCED_STORES) {
-    data[store] = (await listRecords(store)).map((r) => {
-      const { dirty, ...rest } = r;
-      void dirty;
-      return rest;
-    });
+    data[store] = (await listRecords(store))
+      .filter((r) => inBackup(store, r.id))
+      .map((r) => {
+        const { dirty, ...rest } = r;
+        void dirty;
+        return rest;
+      });
   }
   return { app: 'bill-generator', format: 1, exportedAt: new Date().toISOString(), data };
 }
@@ -277,7 +296,7 @@ export async function importBackup(json, { sanitizeTemplateHtml } = {}) {
   for (const store of SYNCED_STORES) {
     const recs = Array.isArray(json.data[store]) ? json.data[store] : [];
     for (const r of recs) {
-      if (!r || typeof r.id !== 'string') continue;
+      if (!r || typeof r.id !== 'string' || !inBackup(store, r.id)) continue;
       const existing = await tx([store], 'readonly', (t) => reqToPromise(t.objectStore(store).get(r.id)));
       if (existing && existing.updatedAt >= (r.updatedAt || 0)) continue;
       const rec = { ...r, deleted: false, dirty: 1, updatedAt: Number(r.updatedAt) || stamp() };
