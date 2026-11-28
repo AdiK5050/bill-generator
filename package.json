@@ -1,6 +1,6 @@
 {
   "name": "bill-generator",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Template-based bill and invoice generator. Offline-first PWA with optional self-hosted sync.",
   "type": "module",
