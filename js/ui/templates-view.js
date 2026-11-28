@@ -1,6 +1,7 @@
 // Template library and in-app HTML editor.
 import { h, toast, confirmDialog, promptDialog, downloadFile, pickFile, slugify, dialog, debounce } from './dom.js';
 import { Preview } from './preview.js';
+import { createAiPanel } from './ai-panel.js';
 import {
   listTemplates,
   getTemplate,
@@ -18,15 +19,30 @@ import { getSettings, getProfile } from '../settings.js';
 let root;
 let hooks;
 let editorPreview = null; // the open editor's preview, destroyed when the view changes
+let editorAi = null; // the open editor's AI panel
 
 function closeEditorPreview() {
   editorPreview?.destroy();
   editorPreview = null;
+  editorAi?.destroy();
+  editorAi = null;
 }
 
-export function initTemplatesView(el, { onUse, onLibraryChanged }) {
+/** True while the HTML editor is open, so background refreshes leave it alone. */
+export function isEditorOpen() {
+  return editorPreview !== null;
+}
+
+/**
+ * hooks:
+ *   onUse(id)            start a new bill with this template (the Use button)
+ *   onSaved(id)          a template was saved in the editor: make it the one in use
+ *   onLibraryChanged()   templates were added, changed or removed
+ *   getCurrentId()       id of the template the Bill page is using
+ */
+export function initTemplatesView(el, { onUse, onSaved, onLibraryChanged, getCurrentId }) {
   root = el;
-  hooks = { onUse, onLibraryChanged };
+  hooks = { onUse, onSaved, onLibraryChanged, getCurrentId };
   return renderLibrary();
 }
 
@@ -34,7 +50,8 @@ export async function renderLibrary() {
   closeEditorPreview();
   const list = await listTemplates();
   const grid = h('div', { class: 'card-grid' });
-  for (const t of list) grid.append(templateCard(t));
+  const currentId = hooks.getCurrentId?.();
+  for (const t of list) grid.append(templateCard(t, t.id === currentId));
   root.replaceChildren(
     h(
       'div',
@@ -42,6 +59,12 @@ export async function renderLibrary() {
       h('h2', { text: 'Templates' }),
       h('span', { class: 'spacer' }),
       h('button', { type: 'button', class: 'btn', text: 'Upload .html', onclick: uploadTemplate }),
+      h('button', {
+        type: 'button',
+        class: 'btn',
+        text: 'Create with AI',
+        onclick: () => openEditor(null, 'builtin:classic', { ai: true }),
+      }),
       h('button', {
         type: 'button',
         class: 'btn primary',
@@ -60,9 +83,17 @@ export async function renderLibrary() {
   );
 }
 
-function templateCard(t) {
+function templateCard(t, inUse) {
   const actions = [
-    h('button', { type: 'button', class: 'btn small primary', text: 'Use', onclick: () => hooks.onUse(t.id) }),
+    inUse
+      ? h('button', {
+          type: 'button',
+          class: 'btn small in-use',
+          text: 'In use',
+          disabled: true,
+          title: 'The Bill page is using this template',
+        })
+      : h('button', { type: 'button', class: 'btn small primary', text: 'Use', onclick: () => hooks.onUse(t.id) }),
     h('button', {
       type: 'button',
       class: 'btn small',
@@ -217,7 +248,7 @@ function reportBody({ parsed, report }) {
 
 // ---------- In-app HTML editor ----------
 
-async function openEditor(id, fromId) {
+async function openEditor(id, fromId, { ai = false } = {}) {
   let name;
   let html;
   if (id) {
@@ -226,13 +257,20 @@ async function openEditor(id, fromId) {
     html = await getDownloadHtml(id);
   } else {
     const src = await getTemplate(fromId);
-    name = `${src.name} (copy)`;
+    // A template made with the assistant takes its name from its metadata unless one is typed.
+    name = ai ? '' : `${src.name} (copy)`;
     html = isBuiltin(fromId) ? await getTemplateHtml(fromId) : await getDownloadHtml(fromId);
   }
   const settings = await getSettings();
   const profile = await getProfile();
 
-  const nameInput = h('input', { class: 'input', type: 'text', value: name, 'aria-label': 'Template name' });
+  const nameInput = h('input', {
+    class: 'input',
+    type: 'text',
+    value: name,
+    placeholder: 'Template name',
+    'aria-label': 'Template name',
+  });
   const code = h('textarea', {
     class: 'code',
     spellcheck: 'false',
@@ -244,6 +282,7 @@ async function openEditor(id, fromId) {
   const problems = h('div', { class: 'editor-problems', 'aria-live': 'polite' });
   const previewWrap = h('div', { class: 'preview-wrap' });
   let lastLoaded = null;
+  let previewOverride = null; // an AI proposal shown in the preview instead of the editor text
 
   const sample = (parsed) => {
     const values = { ...profile };
@@ -261,36 +300,99 @@ async function openEditor(id, fromId) {
   };
 
   const refresh = () => {
+    const proposing = previewOverride !== null;
+    previewWrap.classList.toggle('proposal', proposing);
     try {
-      lastLoaded = loadTemplate(code.value);
+      lastLoaded = loadTemplate(proposing ? previewOverride : code.value);
       const removed = lastLoaded.report.removed.length;
       const warns = lastLoaded.report.warnings.length + lastLoaded.parsed.warnings.length;
-      problems.textContent = `${lastLoaded.parsed.fields.length} fields. ${warns} warning(s). ${removed} item(s) removed by the security filter.`;
+      problems.textContent = `${proposing ? 'Previewing the AI proposal. ' : ''}${lastLoaded.parsed.fields.length} fields. ${warns} warning(s). ${removed} item(s) removed by the security filter.`;
       problems.classList.toggle('warn', warns + removed > 0);
       const display = buildDisplayData(lastLoaded.parsed, sample(lastLoaded.parsed), settings);
       preview.show(renderBill(lastLoaded.html, display), lastLoaded.parsed.pageSize);
     } catch (e) {
       lastLoaded = null;
-      problems.textContent = e.message;
+      problems.textContent = `${proposing ? 'AI proposal: ' : ''}${e.message}`;
       problems.classList.add('warn');
     }
   };
 
+  // Saving closes the editor and makes the template the one in use on the Bill page.
   const save = async () => {
     try {
+      if (
+        aiPanel.hasPending() &&
+        !(await confirmDialog(
+          'Save without the AI change?',
+          'The AI assistant is still working or has a proposal you have not applied. Saving closes the editor and drops it.',
+          { okLabel: 'Save anyway' },
+        ))
+      )
+        return;
       const loaded = loadTemplate(code.value);
       const ok = await showReport('Save template', loaded, { confirmLabel: 'Save' });
       if (!ok) return;
       const res = await saveTemplate({ id, name: nameInput.value, html: code.value });
       id = res.record.id;
-      toast('Template saved.');
-      hooks.onLibraryChanged();
+      await hooks.onSaved(id);
+      toast('Template saved and in use.');
+      await renderLibrary();
     } catch (e) {
       toast(e.message, { error: true });
     }
   };
 
   code.addEventListener('input', debounce(refresh, 300));
+
+  const aiPanel = createAiPanel(
+    {
+      getHtml: () => code.value,
+      setHtml: (value) => {
+        code.value = value;
+        previewOverride = null;
+        refresh();
+      },
+      preview: (value) => {
+        previewOverride = value;
+        refresh();
+      },
+    },
+    ai
+      ? {
+          placeholder:
+            'Describe the bill you want, e.g. "A simple A5 cash memo for a hardware shop with GSTIN, item HSN codes and an advance paid line".',
+        }
+      : {},
+  );
+
+  // Narrow screens show the code or the preview, switched with tabs like the Bill page.
+  const editor = h('div', { class: 'editor', 'data-tab': 'code' });
+  const codeTab = h('button', {
+    type: 'button',
+    role: 'tab',
+    class: 'tab',
+    id: 'tab-code',
+    'aria-controls': 'editor-code-pane',
+    'aria-selected': 'true',
+    text: 'Code',
+  });
+  const previewTab = h('button', {
+    type: 'button',
+    role: 'tab',
+    class: 'tab',
+    id: 'tab-editor-preview',
+    'aria-controls': 'editor-preview-pane',
+    'aria-selected': 'false',
+    text: 'Preview',
+  });
+  const setTab = (which) => {
+    editor.dataset.tab = which;
+    codeTab.setAttribute('aria-selected', String(which === 'code'));
+    previewTab.setAttribute('aria-selected', String(which === 'preview'));
+    if (which === 'preview') preview.fit();
+  };
+  codeTab.addEventListener('click', () => setTab('code'));
+  previewTab.addEventListener('click', () => setTab('preview'));
   code.addEventListener('keydown', (e) => {
     if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       // Insert two spaces instead of moving focus. Escape then Tab still leaves the editor.
@@ -328,6 +430,7 @@ async function openEditor(id, fromId) {
       }),
       nameInput,
       h('span', { class: 'spacer' }),
+      aiPanel.toggleButton,
       h('button', {
         type: 'button',
         class: 'btn',
@@ -340,17 +443,39 @@ async function openEditor(id, fromId) {
       class: 'hint',
       text: 'Edit the HTML on the left; the preview uses sample data. Saving runs the security filter. Tab inserts spaces; press Escape then Tab to leave the editor. Ctrl+S saves.',
     }),
+    aiPanel.bar,
+    editor,
+    aiPanel.el,
+  );
+  editor.append(
+    h('div', { class: 'mobile-tabs', role: 'tablist', 'aria-label': 'Editor view' }, codeTab, previewTab),
     h(
       'div',
       { class: 'editor-split' },
-      h('div', { class: 'editor-pane' }, code, problems),
-      h('div', { class: 'pane preview-pane' }, previewWrap),
+      h(
+        'div',
+        { class: 'editor-pane', id: 'editor-code-pane', role: 'tabpanel', 'aria-labelledby': 'tab-code' },
+        code,
+        problems,
+      ),
+      h(
+        'div',
+        {
+          class: 'pane preview-pane',
+          id: 'editor-preview-pane',
+          role: 'tabpanel',
+          'aria-labelledby': 'tab-editor-preview',
+        },
+        previewWrap,
+      ),
     ),
   );
   closeEditorPreview();
   const preview = new Preview(previewWrap);
   editorPreview = preview;
+  editorAi = aiPanel;
   refresh();
+  if (ai) aiPanel.open();
 }
 
 function sampleValue(f) {

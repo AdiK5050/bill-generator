@@ -140,9 +140,30 @@ async function loadCurrentTemplate() {
   state.settings = await getSettings();
   state.template = await getTemplate(state.templateId);
   els.select.value = state.templateId;
+  await applyProfile(); // before defaults: the profile wins for business_ fields
   applyDefaults(false);
   rebuildForm();
   updatePreview();
+}
+
+/**
+ * Fill business_ fields from the saved business profile. A profile saved after the bill was
+ * started, or a template that adds a business field, would otherwise leave them empty.
+ * Unsaved bills get every empty business field filled; saved bills only fields they never had,
+ * so an old bill does not take on details it was not issued with.
+ */
+async function applyProfile() {
+  const profile = await getProfile();
+  let changed = false;
+  for (const f of state.template.parsed.fields) {
+    if (f.isItem || !f.name.startsWith('business_') || !profile[f.name]) continue;
+    const current = state.input.values[f.name];
+    if (current === undefined || (current === '' && !state.billId)) {
+      state.input.values[f.name] = profile[f.name];
+      changed = true;
+    }
+  }
+  if (changed) saveDraft();
 }
 
 /** Fill empty fields from template defaults. */
@@ -321,6 +342,20 @@ export async function printBill() {
   }
 }
 
+/** The id of the template the Bill page is using. */
+export function getCurrentTemplateId() {
+  return state.templateId;
+}
+
+/**
+ * Use this template for the current bill, keeping what was typed, and load its latest saved
+ * version. Used after a template is saved in the editor.
+ */
+export async function useTemplate(id) {
+  await refreshTemplateList();
+  await switchTemplate(id);
+}
+
 /** Called when data changes elsewhere (sync, settings). */
 export async function onExternalChange() {
   state.settings = await getSettings();
@@ -333,6 +368,7 @@ export async function onExternalChange() {
       state.template = await getTemplate(state.templateId);
     }
   }
+  await applyProfile();
   els.select.value = state.templateId;
   rebuildForm();
   updatePreview();

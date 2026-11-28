@@ -31,6 +31,8 @@ import {
   isSyncing,
 } from '../sync/sync.js';
 import { APP_VERSION } from '../version.js';
+import { getAiConfig, setAiConfig, PROVIDERS } from '../ai/config.js';
+import { testKey } from '../ai/providers.js';
 
 let root;
 let hooks;
@@ -45,11 +47,12 @@ export function initSettingsView(el, { onDataChanged, onErased }) {
 }
 
 export async function renderSettings() {
-  const [settings, profile, account, syncCfg] = await Promise.all([
+  const [settings, profile, account, syncCfg, aiCfg] = await Promise.all([
     getSettings(),
     getProfile(),
     getAccount(),
     getSyncConfig(),
+    getAiConfig(),
   ]);
   root.replaceChildren(
     h('div', { class: 'view-head' }, h('h2', { text: 'Settings' })),
@@ -60,6 +63,7 @@ export async function renderSettings() {
       profileSection(profile),
       numberingSection(settings),
       formatSection(settings),
+      aiSection(aiCfg),
       appearanceSection(),
       backupSection(),
     ),
@@ -430,6 +434,7 @@ function profileSection(profile) {
         onclick: async () => {
           await saveProfile(values);
           toast('Business profile saved.');
+          hooks.onDataChanged(); // fill the new details into the open bill
         },
       }),
     ),
@@ -557,6 +562,137 @@ function formatSection(s) {
           await saveSettings(read());
           toast('Formatting saved.');
           hooks.onDataChanged();
+        },
+      }),
+    ),
+  );
+}
+
+// ---------- AI assistant ----------
+
+function aiSection(cfg) {
+  const providerSel = h(
+    'select',
+    { class: 'input' },
+    Object.entries(PROVIDERS).map(([id, p]) =>
+      h('option', { value: id, text: p.label, selected: cfg.provider === id }),
+    ),
+  );
+  const keyInput = h('input', {
+    class: 'input',
+    type: 'password',
+    autocomplete: 'off',
+    spellcheck: 'false',
+    autocapitalize: 'off',
+  });
+  const modelSel = h('select', { class: 'input' });
+  const keyHint = h('small', { class: 'muted' });
+  const info = h('p', { class: 'muted small', 'aria-live': 'polite' });
+  const freeTierNote = h('p', {
+    class: 'warn small',
+    text: "Gemini free tier: Google may use your requests to improve its products, and people at Google may read them. Google's terms also allow only paid use in the European Economic Area, Switzerland and the UK.",
+  });
+
+  // The saved key is never put back into the page; the field only shows whether one is saved.
+  const fill = () => {
+    const id = providerSel.value;
+    const p = PROVIDERS[id];
+    const saved = cfg.keys[id];
+    keyInput.value = '';
+    keyInput.placeholder = saved ? `Saved key ending in ${saved.slice(-4)}` : 'Paste your API key';
+    keyHint.textContent = p.keyHint;
+    modelSel.replaceChildren(
+      ...p.models.map((m) => h('option', { value: m.id, text: m.label, selected: cfg.models[id] === m.id })),
+    );
+    freeTierNote.hidden = id !== 'gemini';
+    info.textContent = '';
+  };
+  providerSel.addEventListener('change', fill);
+  fill();
+
+  const save = async () => {
+    const provider = providerSel.value;
+    const key = keyInput.value.trim();
+    if (!key && !cfg.keys[provider]) throw new Error('Paste an API key first.');
+    cfg = await setAiConfig({
+      provider,
+      keys: key ? { ...cfg.keys, [provider]: key } : cfg.keys,
+      models: { ...cfg.models, [provider]: modelSel.value },
+    });
+    fill();
+  };
+
+  return card(
+    'AI assistant',
+    h('p', {
+      class: 'muted',
+      text: 'Use your own Claude or Gemini API key to create and edit templates by describing what you want. Usage is billed to your account with that provider.',
+    }),
+    h('div', { class: 'grid2' }, field('Provider', providerSel), field('Model', modelSel)),
+    h('label', { class: 'field' }, h('span', { text: 'API key' }), keyInput, keyHint),
+    freeTierNote,
+    h('p', {
+      class: 'muted small',
+      text: 'Your key is stored only on this device. It is never synced to your server or included in backup files. The assistant sends only the template and your request, never your bills or customers.',
+    }),
+    info,
+    h(
+      'div',
+      { class: 'row' },
+      h('button', {
+        type: 'button',
+        class: 'btn primary',
+        text: 'Save',
+        onclick: async () => {
+          try {
+            await save();
+            toast('AI assistant settings saved.');
+          } catch (e) {
+            info.textContent = e.message;
+          }
+        },
+      }),
+      h('button', {
+        type: 'button',
+        class: 'btn',
+        text: 'Test key',
+        onclick: async () => {
+          const provider = providerSel.value;
+          const apiKey = keyInput.value.trim() || cfg.keys[provider];
+          if (!apiKey) {
+            info.textContent = 'Paste an API key first.';
+            return;
+          }
+          info.textContent = 'Checking...';
+          try {
+            await testKey({ provider, apiKey, model: modelSel.value });
+            info.textContent = `The key works with ${modelSel.selectedOptions[0]?.textContent || modelSel.value}.${keyInput.value.trim() ? ' Press Save to keep it.' : ''}`;
+          } catch (e) {
+            info.textContent = e.message;
+          }
+        },
+      }),
+      h('button', {
+        type: 'button',
+        class: 'btn ghost',
+        text: 'Remove key',
+        onclick: async () => {
+          const provider = providerSel.value;
+          if (!cfg.keys[provider]) {
+            info.textContent = 'No key is saved for this provider.';
+            return;
+          }
+          if (
+            !(await confirmDialog(
+              'Remove API key?',
+              `The ${PROVIDERS[provider].label} key will be deleted from this device.`,
+              { okLabel: 'Remove', danger: true },
+            ))
+          )
+            return;
+          cfg = await setAiConfig({ keys: { ...cfg.keys, [provider]: '' } });
+          fill();
+          toast('API key removed.');
         },
       }),
     ),

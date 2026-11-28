@@ -1,5 +1,6 @@
 import * as E from '../js/engine/index.js';
 import { withMetaBlock } from '../js/library.js';
+import { runAiTests } from './ai.test.js';
 const results = [];
 const t = (name, fn) => {
   try {
@@ -271,4 +272,5 @@ for (const name of ['classic', 'modern', 'gst-invoice', 'thermal-receipt']) {
     ]);
   });
 }
+results.push(...(await runAiTests()));
 document.getElementById('out').textContent = 'DONE\n' + results.map((r) => r.join(' :: ')).join('\n');

@@ -7,8 +7,10 @@ import {
   refreshTemplateList,
   onExternalChange,
   onShow as onBillShow,
+  getCurrentTemplateId,
+  useTemplate,
 } from './ui/bill-view.js';
-import { initTemplatesView, renderLibrary } from './ui/templates-view.js';
+import { initTemplatesView, renderLibrary, isEditorOpen } from './ui/templates-view.js';
 import { initHistoryView, renderHistory } from './ui/history-view.js';
 import { initSettingsView, renderSettings } from './ui/settings-view.js';
 import { applyTheme } from './settings.js';
@@ -108,7 +110,10 @@ async function main() {
       await newBill({ templateId: id });
       go('bill');
     },
-    onLibraryChanged: () => refreshTemplateList(),
+    onSaved: (id) => useTemplate(id),
+    // Reload the template in use too, so an edited or replaced template shows its latest version.
+    onLibraryChanged: () => onExternalChange(),
+    getCurrentId: () => getCurrentTemplateId(),
   });
   await initHistoryView(document.getElementById('view-history'), {
     onOpen: async (id) => {
@@ -141,7 +146,8 @@ async function main() {
     if (evt.source !== 'sync') return;
     const view = currentView();
     if (view === 'history' && evt.store === 'bills') renderHistory();
-    if (view === 'templates' && evt.store === 'templates') renderLibrary();
+    // Never redraw over the open editor: it would throw away unsaved edits.
+    if (view === 'templates' && evt.store === 'templates' && !isEditorOpen()) renderLibrary();
     if (evt.store === 'templates' || evt.store === 'kv') {
       const typing = document.activeElement && billRoot.contains(document.activeElement);
       if (typing) refreshTemplateList();
