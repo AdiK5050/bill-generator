@@ -490,12 +490,25 @@ h1 { color: var(--accent); }</code></pre>
               <div class="g-sheet thermal" aria-hidden="true"><span>80 mm</span></div>
               <figcaption>
                 <strong>80 mm receipt</strong>
-                <code>@page { size: 80mm 297mm; margin: 0; }</code>
+                <code>@page { size: 80mm auto; margin: 0; }</code>
               </figcaption>
             </figure>
           </div>
           <ul class="g-list">
-            <li>Receipts need an explicit height. <code>size: 80mm auto</code> is not valid CSS.</li>
+            <li>
+              For receipts, write a width followed by <code>auto</code>, like <code>size: 80mm auto</code> or
+              <code>size: 58mm auto</code>. The app measures each bill and makes the page exactly as long as it, so the
+              printer does not feed blank paper. Do not give <code>body</code> a <code>min-height</code>. A fixed size
+              such as <code>80mm 297mm</code> also works.
+            </li>
+            <li>
+              Use <code>auto</code> only that way, in a plain <code>@page</code> rule. <code>A4 auto</code> or
+              <code>80mm auto landscape</code> are not valid, and the upload report warns about them.
+            </li>
+            <li>
+              In the print dialog or the printer's settings, choose roll paper (for example "80 mm x Receipt"), not A4.
+              If the printer driver has a paper-saving or "cut after content" option, turn it on too.
+            </li>
             <li>Set the page margins as padding on <code>body</code>, and keep <code>@page</code> margin at 0.</li>
             <li>Add <code>print-color-adjust: exact;</code> to <code>body</code> so background colours print.</li>
             <li>Add <code>tr { break-inside: avoid; }</code> so item rows never split across two pages.</li>

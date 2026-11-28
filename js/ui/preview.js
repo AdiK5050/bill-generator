@@ -10,6 +10,9 @@ const MM_TO_PX = 96 / 25.4;
 // can never both miss (e.g. at 900.5px when zoomed). Outside it, the pane has a fixed height.
 const FIXED_HEIGHT_PANE = 'not all and (max-width: 900px)';
 const PAD = 16;
+const AUTO_PAGE_STYLE_ID = 'bill-auto-page-size';
+// Extra height on a fitted page, so rounding never pushes the last line onto a second page.
+const AUTO_PAGE_SLACK_MM = 2;
 
 export class Preview {
   constructor(container) {
@@ -51,6 +54,10 @@ export class Preview {
   }
 
   fit() {
+    if (this.pageSize.autoHeight) {
+      this.fitAutoHeight();
+      return;
+    }
     const pageW = this.pageSize.widthMm * MM_TO_PX;
     const pageH = this.pageSize.heightMm * MM_TO_PX;
     let contentH = pageH;
@@ -80,10 +87,48 @@ export class Preview {
     this.stage.style.height = `${contentH * scale}px`;
   }
 
+  /**
+   * A page as long as the bill ("size: 80mm auto"): measure the bill at the page width, set
+   * the page height to match with an @page rule inside the bill, and fit the preview to the
+   * pane's width (a long receipt scrolls instead of shrinking).
+   */
+  fitAutoHeight() {
+    const pageW = this.pageSize.widthMm * MM_TO_PX;
+    this.frame.style.width = `${pageW}px`;
+    // The root's scrollHeight is never less than the frame's height, so shrink it first.
+    this.frame.style.height = '0px';
+    let contentH = 0;
+    try {
+      const doc = this.frame.contentDocument;
+      if (doc && doc.documentElement && doc.head) {
+        contentH = doc.documentElement.scrollHeight;
+        const heightMm = Math.ceil(contentH / MM_TO_PX) + AUTO_PAGE_SLACK_MM;
+        let style = doc.getElementById(AUTO_PAGE_STYLE_ID);
+        if (!style) {
+          style = doc.createElement('style');
+          style.id = AUTO_PAGE_STYLE_ID;
+          doc.head.append(style); // last, so it wins over the template's own @page rule
+        }
+        // Margin 0: the measured height is the whole page, so page margins would not fit.
+        style.textContent = `@page { size: ${this.pageSize.widthMm}mm ${heightMm}mm; margin: 0; }`;
+      }
+    } catch {
+      /* not ready */
+    }
+    contentH = Math.max(contentH, 100);
+    const availableW = Math.max(100, this.viewport.clientWidth - PAD * 2);
+    const scale = Math.min(1.25, availableW / pageW);
+    this.frame.style.height = `${contentH}px`;
+    this.frame.style.transform = `scale(${scale})`;
+    this.stage.style.width = `${pageW * scale}px`;
+    this.stage.style.height = `${contentH * scale}px`;
+  }
+
   /** Print only the bill, at the template's page size. Resolves once the dialog was opened. */
   async print() {
     const win = this.frame.contentWindow;
     if (!win) throw new Error('Preview is not ready yet.');
+    if (this.pageSize.autoHeight) this.fitAutoHeight(); // the page height matches the bill as it is now
     win.focus();
     win.print();
   }

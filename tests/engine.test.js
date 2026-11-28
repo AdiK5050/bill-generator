@@ -120,6 +120,59 @@ t('page landscape', () => {
   const ps = E.parsePageSize('@page{size:A4 landscape}');
   eq([ps.widthMm, ps.heightMm], [297, 210]);
 });
+t('page size auto height', () => {
+  const ps = E.parsePageSize('@page { size: 58mm auto }');
+  eq([ps.widthMm, ps.heightMm, ps.autoHeight, ps.label], [58, null, true, '58mm auto']);
+});
+const pageTpl = (rule, extra = '') =>
+  E.loadTemplate(
+    `<html><head><style>${rule} body { color: red; }${extra}</style></head><body>{{grand_total}}</body></html>`,
+  );
+t('auto height survives the security filter', () => {
+  const tpl = pageTpl('@page { size: 80mm auto; margin: 0; }');
+  ok(/@page\s*\{\s*size: 80mm auto;/.test(tpl.html), tpl.html);
+  ok(/margin: 0px/.test(tpl.html), 'other @page declarations kept');
+  eq(tpl.parsed.pageSize.autoHeight, true);
+  eq(tpl.report.warnings, []);
+  // Stored templates are filtered again on every load: the marker must survive a second pass.
+  eq(E.loadTemplate(tpl.html).parsed.pageSize.autoHeight, true);
+});
+t('auto height with placeholders in CSS', () => {
+  const tpl = pageTpl('@page { size: 80mm auto; }', ':root { --accent: {{accent_color}}; }');
+  const out = E.renderBill(tpl.html, E.buildDisplayData(tpl.parsed, { values: { accent_color: 'red' }, items: [] }));
+  ok(/size: 80mm auto/.test(out), out);
+});
+t('fixed page sizes are unchanged', () => {
+  for (const [rule, want] of [
+    ['@page { size: A4; margin: 0; }', [210, 297]],
+    ['@page { size: A5 landscape; }', [210, 148]],
+    ['@page { size: 80mm 297mm; }', [80, 297]],
+    ['@page { size: letter; }', [215.9, 279.4]],
+  ]) {
+    const tpl = pageTpl(rule);
+    eq(
+      [tpl.parsed.pageSize.widthMm, tpl.parsed.pageSize.heightMm, !!tpl.parsed.pageSize.autoHeight],
+      [...want, false],
+      rule,
+    );
+    ok(!/auto/.test(tpl.html), `no auto added for ${rule}`);
+    eq(tpl.report.warnings, [], rule);
+  }
+});
+t('invalid page sizes are reported', () => {
+  for (const bad of ['A4 auto', '80mm auto landscape', 'banana']) {
+    const tpl = pageTpl(`@page { size: ${bad}; }`);
+    ok(
+      tpl.report.warnings.some((w) => w.includes(`"${bad}"`)),
+      `${bad}: ${JSON.stringify(tpl.report.warnings)}`,
+    );
+    eq(tpl.parsed.pageSize.declared, false, bad);
+    ok(!/auto/.test(tpl.html.replace(/banana/, '')), `${bad} not kept`);
+  }
+  // auto only counts in a plain @page rule
+  const first = pageTpl('@page :first { size: 80mm auto; }');
+  ok(first.report.warnings.length === 1 && !first.parsed.pageSize.autoHeight, JSON.stringify(first.report.warnings));
+});
 
 // renderer
 t('render', () => {

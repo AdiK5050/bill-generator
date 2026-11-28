@@ -29,7 +29,10 @@ function lengthToMm(token) {
   return m ? parseFloat(m[1]) * UNIT_MM[m[2].toLowerCase()] : null;
 }
 
-/** Read the page size from an `@page { size: ... }` rule. Returns mm. Default A4. */
+/**
+ * Read the page size from an `@page { size: ... }` rule. Returns mm. Default A4.
+ * A width followed by "auto" returns autoHeight: true and heightMm: null.
+ */
 export function parsePageSize(css) {
   const result = { widthMm: 210, heightMm: 297, declared: false, label: 'A4' };
   const re = /@page\s*(?::[a-z]+\s*)?\{([^}]*)\}/gi;
@@ -41,6 +44,11 @@ export function parsePageSize(css) {
   }
   if (!sizeValue) return result;
   const tokens = sizeValue.toLowerCase().split(/\s+/);
+  // "80mm auto": as wide as given, as long as the bill (measured when shown and printed).
+  if (tokens.length === 2 && tokens[1] === 'auto') {
+    const width = lengthToMm(tokens[0]);
+    if (width !== null) return { widthMm: width, heightMm: null, autoHeight: true, declared: true, label: sizeValue };
+  }
   let w = null;
   let h = null;
   let orientation = null;

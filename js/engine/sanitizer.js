@@ -135,18 +135,81 @@ function cleanRules(ruleList, removed) {
   }
 }
 
+// ---- Page size ----
+// "size: 80mm auto" is not valid CSS, but templates may use it to ask for a page as long as
+// the bill: the app measures the bill and sets the real height when it shows and prints it.
+// The browser's CSS parser drops invalid declarations, so the marker is put back after parsing.
+const CSS_LENGTH = '(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:mm|cm|in|pt|pc|px|q)';
+export const AUTO_PAGE_SIZE_RE = new RegExp(`^(${CSS_LENGTH})\\s+auto$`, 'i');
+
+/** size values declared in @page rules, as written: [{ plain, value }] (plain: no :first etc.). */
+function rawPageSizes(css) {
+  const out = [];
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const pageRe = /@page\s*([^{]*)\{([^}]*)\}/gi;
+  let m;
+  while ((m = pageRe.exec(text))) {
+    const sizeRe = /(?:^|[;\s])size\s*:\s*([^;]+)/gi;
+    let s;
+    while ((s = sizeRe.exec(m[2]))) {
+      out.push({
+        plain: !m[1].trim(),
+        value: s[1]
+          .trim()
+          .replace(/\s*!important$/i, '')
+          .replace(/\s+/g, ' '),
+      });
+    }
+  }
+  return out;
+}
+
+function isValidPageSize(value) {
+  const sheet = new CSSStyleSheet();
+  try {
+    sheet.replaceSync(`@page { size: ${value}; }`);
+  } catch {
+    return false;
+  }
+  const rule = sheet.cssRules[0];
+  return Boolean(rule && rule.style && rule.style.getPropertyValue('size'));
+}
+
 /**
  * Sanitize a CSS string using the browser's own CSS parser, so escapes and odd syntax
  * cannot hide url() or @import. Returns cleaned CSS text.
+ * warnings (optional) receives notes about page sizes the browser would ignore.
  */
-export function sanitizeCss(css, removed = []) {
+export function sanitizeCss(css, removed = [], warnings = null) {
   if (!css || !css.trim()) return '';
   if (/@import/i.test(css)) removed.push('CSS @import');
+
+  const sizes = rawPageSizes(css);
+  const lastPlain = sizes.filter((s) => s.plain).pop();
+  const autoWidth = lastPlain ? AUTO_PAGE_SIZE_RE.exec(lastPlain.value)?.[1] : null;
+  if (warnings) {
+    for (const s of sizes) {
+      if (s.plain && AUTO_PAGE_SIZE_RE.test(s.value)) continue;
+      if (isValidPageSize(s.value)) continue;
+      warnings.push(
+        `Page size "${s.value}" is not valid CSS, so browsers ignore it. Use a fixed size such as "A4" or "80mm 297mm", or a width followed by "auto" (for example "80mm auto") in a plain @page rule to make the page as long as the bill.`,
+      );
+    }
+  }
+
   const sheet = new CSSStyleSheet();
   // replaceSync ignores @import rules by design.
   sheet.replaceSync(css);
   cleanRules(sheet.cssRules, removed);
-  return Array.from(sheet.cssRules, (r) => r.cssText).join('\n');
+  const rules = Array.from(sheet.cssRules, (r) => r.cssText);
+  if (autoWidth) {
+    // Built only from the matched length, so nothing else from the template is re-inserted.
+    const marker = `size: ${autoWidth.toLowerCase()} auto;`;
+    const i = Array.from(sheet.cssRules).findIndex((r) => r.constructor?.name === 'CSSPageRule' && !r.selectorText);
+    if (i >= 0) rules[i] = rules[i].replace(/\bsize\s*:[^;}]*;?\s*/i, '').replace(/\{\s*/, `{ ${marker} `);
+    else rules.push(`@page { ${marker} }`);
+  }
+  return rules.join('\n');
 }
 
 /** Sanitize the contents of a style="" attribute. */
@@ -251,7 +314,7 @@ export function sanitizeTemplate(rawHtml) {
   const cssRemoved = [];
   let css = '';
   try {
-    css = sanitizeCss(cssParts.join('\n'), cssRemoved);
+    css = sanitizeCss(cssParts.join('\n'), cssRemoved, report.warnings);
   } catch (e) {
     report.warnings.push(`CSS could not be parsed and was dropped (${e.message}).`);
   }
