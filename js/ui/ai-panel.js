@@ -3,7 +3,8 @@
 // The assistant proposes a new version of the template; the editor previews it and the user
 // applies or discards it, from the panel or from a bar above the editor. Applied changes can be undone.
 import { h, dialog, confirmDialog } from './dom.js';
-import { getActiveAi, setAiConfig, PROVIDERS } from '../ai/config.js';
+import { getActiveAi, getAiConfig, setAiConfig, PROVIDERS } from '../ai/config.js';
+import { getKeySyncState } from '../ai/key-sync.js';
 import { createTemplateAssistant, fieldChanges } from '../ai/template-assistant.js';
 
 const TOOL_DONE = {
@@ -193,6 +194,13 @@ export function createAiPanel(host, { placeholder } = {}) {
       active = ai;
     }
     setupNote.hidden = Boolean(ai);
+    if (!ai) {
+      const [cfg, sync] = await Promise.all([getAiConfig(), getKeySyncState()]);
+      setupText.textContent =
+        sync.providers.includes(cfg.provider) && !sync.unlocked
+          ? 'Your API key is synced from another device. Enter your sync passphrase in Settings > AI assistant to use it here.'
+          : 'To use the assistant, add your own Claude or Gemini API key in Settings.';
+    }
     composer.hidden = !ai;
     log.hidden = !log.childElementCount;
     if (ai) {

@@ -1,6 +1,7 @@
 // AI assistant settings. Kept in the local-only store: API keys never sync to a server
 // and are never written to backup files.
 import { getLocal, setLocal } from '../storage.js';
+import { readSyncedKey } from './key-sync.js';
 
 export const PROVIDERS = {
   anthropic: {
@@ -51,10 +52,13 @@ export async function setAiConfig(patch) {
   return cfg;
 }
 
-/** The provider, key and model to use now, or null when no key is set for the chosen provider. */
+/**
+ * The provider, key and model to use now, or null when there is no usable key for the chosen
+ * provider. A key saved on this device wins over one synced from the user's other devices.
+ */
 export async function getActiveAi() {
   const cfg = await getAiConfig();
-  const apiKey = cfg.keys[cfg.provider];
+  const apiKey = cfg.keys[cfg.provider] || (await readSyncedKey(cfg.provider));
   if (!apiKey) return null;
   return { provider: cfg.provider, apiKey, model: cfg.models[cfg.provider], config: cfg };
 }

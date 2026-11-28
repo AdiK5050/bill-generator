@@ -1,6 +1,18 @@
 // AI assistant tests. The provider APIs are replaced by a fake fetch, so no key or network is used.
 import { createSession, testKey, AiError } from '../js/ai/providers.js';
 import {
+  getKeySyncState,
+  createPassphrase,
+  unlock,
+  lockDevice,
+  saveSyncedKey,
+  readSyncedKey,
+  removeSyncedKey,
+  PassphraseError,
+} from '../js/ai/key-sync.js';
+import { getActiveAi, setAiConfig } from '../js/ai/config.js';
+import { getKv, setKv, exportBackup, importBackup } from '../js/storage.js';
+import {
   runTemplateTool,
   fieldChanges,
   createTemplateAssistant,
@@ -402,6 +414,58 @@ export async function runAiTests() {
     eq(f.calls[0].init.method, 'GET');
     eq(f.calls[1].url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash');
     eq(f.calls[1].init.headers['x-goog-api-key'], 'k2');
+  });
+
+  // ---------- Synced API keys (end-to-end encrypted) ----------
+
+  await t('key sync: passphrase, encrypt, lock and unlock', async () => {
+    eq(await getKeySyncState(), { exists: false, unlocked: false, providers: [] });
+    await rejects(createPassphrase('short'), (e) => ok(e instanceof PassphraseError, e.message));
+    // Fewer PBKDF2 iterations keep the test fast; the app uses 600,000.
+    await createPassphrase('correct horse battery', { iterations: 1000 });
+    await rejects(createPassphrase('another passphrase', { iterations: 1000 }), (e) =>
+      ok(/already set/.test(e.message)),
+    );
+    await saveSyncedKey('anthropic', 'sk-ant-secret-1234');
+    eq(await getKeySyncState(), { exists: true, unlocked: true, providers: ['anthropic'] });
+    eq(await readSyncedKey('anthropic'), 'sk-ant-secret-1234');
+    const stored = JSON.stringify(await getKv('aiKeys'));
+    ok(!stored.includes('sk-ant') && !stored.includes('secret') && !stored.includes('correct horse'), stored);
+    await lockDevice();
+    eq(await readSyncedKey('anthropic'), null, 'locked device cannot read');
+    await rejects(saveSyncedKey('gemini', 'x'), (e) => ok(e instanceof PassphraseError));
+    await rejects(unlock('wrong passphrase!'), (e) => ok(/not right/.test(e.message), e.message));
+    await unlock('correct horse battery');
+    eq(await readSyncedKey('anthropic'), 'sk-ant-secret-1234');
+  });
+
+  await t('key sync: a key cannot be moved to another provider', async () => {
+    const rec = await getKv('aiKeys');
+    await setKv('aiKeys', { ...rec, keys: { ...rec.keys, gemini: rec.keys.anthropic } });
+    eq(await readSyncedKey('gemini'), null);
+    await setKv('aiKeys', rec);
+  });
+
+  await t('key sync: used by the assistant, a device key wins', async () => {
+    await setAiConfig({ provider: 'anthropic', keys: { anthropic: '', gemini: '' } });
+    eq((await getActiveAi()).apiKey, 'sk-ant-secret-1234', 'synced key used');
+    await setAiConfig({ keys: { anthropic: 'sk-device-only', gemini: '' } });
+    eq((await getActiveAi()).apiKey, 'sk-device-only', 'device key wins');
+    await setAiConfig({ keys: { anthropic: '', gemini: '' } });
+  });
+
+  await t('key sync: never in backups', async () => {
+    const backup = await exportBackup();
+    ok(!backup.data.kv.some((r) => r.id === 'aiKeys'), 'exported');
+    const before = JSON.stringify(await getKv('aiKeys'));
+    const evil = { id: 'aiKeys', updatedAt: Date.now() + 1e9, value: { v: 1, salt: 'AAAA', verifier: {}, keys: {} } };
+    await importBackup({ app: 'bill-generator', data: { kv: [evil] } });
+    eq(JSON.stringify(await getKv('aiKeys')), before, 'import ignored it');
+  });
+
+  await t('key sync: removing the last key clears the passphrase', async () => {
+    await removeSyncedKey('anthropic');
+    eq(await getKeySyncState(), { exists: false, unlocked: false, providers: [] });
   });
 
   // ---------- Template assistant ----------
