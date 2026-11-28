@@ -118,11 +118,15 @@ export async function testKey({ provider, apiKey, model, fetchImpl }) {
 
 async function request(f, provider, url, { method = 'POST', headers, body, signal } = {}) {
   const name = PROVIDER_NAMES[provider];
+  // An abort listener added to an already aborted signal never fires, so check first: Stop
+  // pressed between two steps of a turn must still stop the next request.
+  if (signal?.aborted) throw new AiError('Stopped.', { kind: 'aborted' });
   const timeout = new AbortController();
   const timer = setTimeout(() => timeout.abort(), REQUEST_TIMEOUT_MS);
   const onAbort = () => timeout.abort();
   signal?.addEventListener('abort', onAbort);
   let res;
+  let data;
   try {
     res = await f(url, {
       method,
@@ -132,6 +136,9 @@ async function request(f, provider, url, { method = 'POST', headers, body, signa
       credentials: 'omit',
       referrerPolicy: 'no-referrer',
     });
+    // Read the body while Stop and the timeout still apply.
+    // Error bodies are usually JSON, but a proxy or outage page may not be.
+    data = await res.json().catch(() => null);
   } catch (e) {
     if (signal?.aborted) throw new AiError('Stopped.', { kind: 'aborted' });
     if (timeout.signal.aborted) throw new AiError(`${name} took too long to answer. Try again.`, { kind: 'busy' });
@@ -140,8 +147,9 @@ async function request(f, provider, url, { method = 'POST', headers, body, signa
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
   }
-  // Error bodies are usually JSON, but a proxy or outage page may not be.
-  const data = await res.json().catch(() => null);
+  // An abort while the body was read ends up in the json() catch above.
+  if (signal?.aborted) throw new AiError('Stopped.', { kind: 'aborted' });
+  if (timeout.signal.aborted) throw new AiError(`${name} took too long to answer. Try again.`, { kind: 'busy' });
   if (!res.ok) throw httpError(provider, res.status, data);
   return data;
 }

@@ -9,7 +9,7 @@
 // never syncs. The passphrase itself is not stored anywhere.
 //
 // Record: { v: 1, salt, iterations, verifier: { iv, ct }, keys: { [provider]: { iv, ct } } }
-import { getKv, setKv, deleteRecord, getLocal, setLocal, deleteLocal, onChange } from '../storage.js';
+import { getKv, setKv, deleteRecord, forgetRecord, getLocal, setLocal, deleteLocal, onChange } from '../storage.js';
 
 const RECORD_ID = 'aiKeys';
 const DEVICE_KEY_ID = 'aiSyncKey';
@@ -112,6 +112,17 @@ export async function unlock(passphrase) {
 
 /** Forget the passphrase on this device. Synced keys stay on the server, encrypted. */
 export async function lockDevice() {
+  await deleteLocal(DEVICE_KEY_ID);
+  notify();
+}
+
+/**
+ * Drop this device's copy of the synced keys and the passphrase key, without touching the
+ * server. Used when signing in to a different account, so the previous account's encrypted
+ * keys are not uploaded over the new account's.
+ */
+export async function forgetKeySyncOnDevice() {
+  await forgetRecord('kv', RECORD_ID);
   await deleteLocal(DEVICE_KEY_ID);
   notify();
 }

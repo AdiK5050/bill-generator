@@ -139,6 +139,15 @@ export async function deleteRecord(store, id) {
   emit({ store, id, source: 'local' });
 }
 
+/**
+ * Remove a record from this device only, without a tombstone, so nothing syncs. Used for
+ * records that belong to a previous account and must not be uploaded to a new one.
+ */
+export async function forgetRecord(store, id) {
+  await tx([store], 'readwrite', (t) => reqToPromise(t.objectStore(store).delete(id)));
+  emit({ store, id, source: 'local' });
+}
+
 export async function getKv(id, fallback = null) {
   const rec = await getRecord('kv', id);
   return rec ? rec.value : fallback;

@@ -218,8 +218,9 @@ export function createAiPanel(host, { placeholder } = {}) {
     syncUi();
   }
 
-  function showProposal(html) {
-    const base = host.getHtml();
+  // base is the editor text the assistant worked from, so edits made while it ran count as
+  // edits made after the proposal.
+  function showProposal(html, base) {
     proposal = { html, base };
     const { added, removed, valid } = fieldChanges(base, html);
     const bits = [];
@@ -333,8 +334,9 @@ export function createAiPanel(host, { placeholder } = {}) {
     const timer = setInterval(tick, 1000);
     controller = new AbortController();
     setBusy(true);
+    const base = host.getHtml();
     try {
-      const res = await assistant.send(text, host.getHtml(), {
+      const res = await assistant.send(text, base, {
         signal: controller.signal,
         onStep: (step, calls) => {
           const did = [...new Set(calls.map((c) => TOOL_DONE[c.name] || 'used a tool'))].join(' and ');
@@ -344,7 +346,7 @@ export function createAiPanel(host, { placeholder } = {}) {
       });
       working.remove();
       addMessage('assistant', res.text || (res.draft ? 'Here is the proposed change.' : 'Done.'));
-      if (res.draft) showProposal(res.draft);
+      if (res.draft) showProposal(res.draft, base);
     } catch (e) {
       working.remove();
       if (e.kind === 'aborted') addMessage('status', 'Stopped.');

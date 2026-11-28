@@ -435,7 +435,18 @@ async function openEditor(id, fromId, { ai = false } = {}) {
         type: 'button',
         class: 'btn',
         text: 'Report',
-        onclick: () => lastLoaded && showReport('Validation report', lastLoaded),
+        onclick: () => {
+          // While an AI proposal is previewed, lastLoaded is the proposal: report on the editor text.
+          if (previewOverride === null) {
+            if (lastLoaded) showReport('Validation report', lastLoaded);
+            return;
+          }
+          try {
+            showReport('Validation report', loadTemplate(code.value));
+          } catch (e) {
+            toast(e.message, { error: true });
+          }
+        },
       }),
       h('button', { type: 'button', class: 'btn primary', text: 'Save', onclick: save }),
     ),

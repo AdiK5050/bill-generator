@@ -41,6 +41,7 @@ import {
   createPassphrase,
   unlock,
   lockDevice,
+  forgetKeySyncOnDevice,
   MIN_PASSPHRASE_LENGTH,
 } from '../ai/key-sync.js';
 
@@ -320,6 +321,12 @@ async function signInFlow({ serverUrl = '', username = '', reauth = false } = {}
           { okLabel: 'Merge and sign in' },
         );
         if (!merge) return;
+        // Synced API keys belong to one account and are encrypted with its passphrase. Keep
+        // them only when signing back in to the account this device last used, so another
+        // account's keys are never uploaded over this one's.
+        const previousOwner = account.mode === 'user' ? account.user?.username : account.lastUsername;
+        const previousUrl = account.mode === 'user' ? account.serverUrl : account.lastServerUrl;
+        if (previousOwner !== next.user.username || previousUrl !== url) await forgetKeySyncOnDevice();
         await resetSyncState();
         await markAllDirty();
       }
@@ -679,6 +686,9 @@ function aiSection(cfg, account) {
 
   /** Make sure this device can encrypt synced keys: set or enter the passphrase. */
   const ensureUnlocked = async () => {
+    // Fetch the server's copy first. Deciding from a stale local copy would set a second
+    // passphrase (or write a stale key list) over the keys another device already synced.
+    await pullSyncedKeys();
     const state = await getKeySyncState();
     if (state.unlocked) return true;
     return state.exists ? unlockFlow() : createPassphraseFlow();
@@ -739,8 +749,16 @@ function aiSection(cfg, account) {
     ) {
       return;
     }
-    if (which === 'all') await removeSyncedKey(provider);
-    else cfg = await setAiConfig({ keys: { ...cfg.keys, [provider]: '' } });
+    if (which === 'all') {
+      // Remove from the server's current list, not a stale local one.
+      try {
+        if (signedIn) await pullSyncedKeys();
+      } catch (e) {
+        info.textContent = e.message;
+        return;
+      }
+      await removeSyncedKey(provider);
+    } else cfg = await setAiConfig({ keys: { ...cfg.keys, [provider]: '' } });
     await fill();
     toast('API key removed.');
   };
@@ -835,6 +853,13 @@ function aiSection(cfg, account) {
   );
   fill();
   return card_;
+}
+
+/** Sync now so the local copy of the synced keys matches the server. Throws when it cannot. */
+async function pullSyncedKeys() {
+  const res = await syncNow();
+  if (res?.error) throw new Error(`Could not reach your sync server to check your synced keys: ${res.error}`);
+  if (res?.skipped) throw new Error('Connect to your sync server to change synced keys.');
 }
 
 /** Ask for the sync passphrase for the first time. Resolves true when set. */

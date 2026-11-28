@@ -147,10 +147,10 @@ async function loadCurrentTemplate() {
 }
 
 /**
- * Fill business_ fields from the saved business profile. A profile saved after the bill was
- * started, or a template that adds a business field, would otherwise leave them empty.
- * Unsaved bills get every empty business field filled; saved bills only fields they never had,
- * so an old bill does not take on details it was not issued with.
+ * Fill business_ fields from the saved business profile, but only fields this bill has never
+ * had: a profile saved after the bill was started, or a template that adds a business field.
+ * A field the user cleared on purpose (an empty string) is left alone, and so is anything on a
+ * saved bill that already has a value.
  */
 async function applyProfile() {
   const profile = await getProfile();
@@ -158,7 +158,7 @@ async function applyProfile() {
   for (const f of state.template.parsed.fields) {
     if (f.isItem || !f.name.startsWith('business_') || !profile[f.name]) continue;
     const current = state.input.values[f.name];
-    if (current === undefined || (current === '' && !state.billId)) {
+    if (current === undefined) {
       state.input.values[f.name] = profile[f.name];
       changed = true;
     }
@@ -353,7 +353,14 @@ export function getCurrentTemplateId() {
  */
 export async function useTemplate(id) {
   await refreshTemplateList();
+  const changed = id !== state.templateId;
   await switchTemplate(id);
+  // A saved bill now shows another template than the one it was saved with: say so, so it
+  // is saved (and printing saves it) instead of the stored copy silently differing.
+  if (changed && state.billId && state.templateId === id) {
+    state.dirtySinceSave = true;
+    setStatus('Unsaved changes');
+  }
 }
 
 /** Called when data changes elsewhere (sync, settings). */

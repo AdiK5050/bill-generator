@@ -1,5 +1,6 @@
-// AI assistant settings. Kept in the local-only store: API keys never sync to a server
-// and are never written to backup files.
+// AI assistant settings. Kept in the local-only store: keys saved here stay on this device
+// and are never written to backup files. Keys shared across devices live in key-sync.js,
+// encrypted with the user's sync passphrase.
 import { getLocal, setLocal } from '../storage.js';
 import { readSyncedKey } from './key-sync.js';
 
